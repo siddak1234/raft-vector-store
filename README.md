@@ -24,13 +24,21 @@ nodes, where each shard is replicated from a primary to its backups.
 2. Clone the repository outside any synced folder, such as iCloud Drive.
 3. Run `cargo xtask ci` to build the workspace and run every check.
 
-`cargo xtask help` lists all project commands.
+`cargo xtask help` lists all project commands. To reproduce the committed results:
+
+```sh
+cargo xtask validate          # seeds 1-10000 of the random-fault campaign
+cargo xtask experiment AA     # A/A test of the harness
+cargo xtask experiment E2     # Raft paper Figure 16 reproduction
+cargo xtask figures           # summaries and figures from the latest results
+```
 
 ## Documents
 
 - [Project plan](docs/PLAN.md): research questions, design, metrics, experiments, and
   phases
 - [Contributing](CONTRIBUTING.md): repository rules and workflow
+- [Results](docs/RESULTS.md): results so far, with the commands that produce them
 - [Bug log](docs/BUGLOG.md): bugs found during development
 
 ## License

@@ -346,15 +346,19 @@ tagged `protocol-v1`.
 
 ### Phase 1: Simulator and Raft
 
-- [ ] Simulator with delay model, fault injection, schedule files, separate random
+- [x] Simulator with delay model, fault injection, schedule files, separate random
       streams, and message and byte accounting
-- [ ] Shared and Raft-specific checkers
-- [ ] Raft: election, replication, commit rule, no-op, persistence, restart
-- [ ] A/A validation of the harness
-- [ ] E2 (Figure 16 reproduction) in the simulator
+- [x] Shared and Raft-specific checkers
+- [x] Raft: election, replication, commit rule, no-op, persistence, restart
+- [x] A/A validation of the harness
+- [x] E2 (Figure 16 reproduction) in the simulator
 
 **Exit:** seeds 1–10,000 pass with zero violations (`docs/RESEARCH.md` §9). The A/A run
 shows no difference, and E2 results are recorded.
+
+**Status:** done. Validation and the A/A test passed. E2 met R1 but not R2; amendment A2
+in `docs/RESEARCH.md` records the cause and the decision to proceed. Results are
+summarized in `docs/RESULTS.md`.
 
 ### Phase 2: Multi-Paxos and State-Space Analysis
 

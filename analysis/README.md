@@ -7,4 +7,13 @@ Statistics and figures for the experiments (`docs/PLAN.md` §5 and Phase 6).
   regenerated from raw results.
 - Dependencies are pinned in `uv.lock`. Run `uv sync` in this folder to create the
   environment.
-- Analysis code is added with the first experiment (E2, Phase 1).
+- `cargo xtask figures` runs every script below from the repository root.
+
+| Script | Reads | Prints |
+|---|---|---|
+| `validation.py` | `results/validation` | Seeds, simulated hours, faults, violations (M12, M13) |
+| `aa.py` | `results/AA` | The A/A comparison and its pass or fail verdict |
+| `e2.py` | `results/E2`, `results/E2-lan` | Figure 16 summary, criteria R1 and R2, and figures |
+
+`stats.py` holds the pre-registered statistical procedures (`docs/RESEARCH.md` §8) and
+`results.py` finds the latest results folder of each experiment.

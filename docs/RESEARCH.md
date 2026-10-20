@@ -421,25 +421,30 @@ was collected, and they apply to both algorithms.
 | 100–200 ms | 149.9 ms |
 | 150–300 ms | 210.8 ms |
 
-Results: `experiments/results/E2/20261020T173244Z-99054ab`.
+Results: `experiments/results/E2/20261020T173556Z-61c89dd`. This rerun has the same
+measurements as the first run (`20261020T173244Z-99054ab`). The only difference is that
+trials with no leader at the crash instant are now marked not ready (`docs/BUGLOG.md`).
 
 **Cause.** On the paper-like network, a round trip takes 7.5–22.5 ms (mean 15 ms). That is
 longer than the shortest election timeouts in the 12–24 ms range. This breaks Raft's
 timing requirement, broadcastTime ≪ electionTimeout (§5.6), as the paper notes for this
 range (§9.3). Candidates time out before their vote requests are answered, so elections
-split.
+split. Leadership is also unstable before the crash: in 67 of the 1000 trials at 12–24 ms,
+an election was already in progress at the instant chosen for the crash, so those trials
+have no measurement.
 
 | Timeout range | Trials that elected a leader in the first round | Median rounds |
 |---|---|---|
-| 12–24 ms | 6.9% | 4 |
+| 12–24 ms | 7.4% | 4 |
 | 25–50 ms | 33.2% | 2 |
 | 150–300 ms | 66.4% | 1 |
 
 **Check of the simulator.** An exploratory run repeated E2 on the LAN-like network (mean
 round trip 1 ms), where the timing requirement holds. It was decided after seeing the
 result and is not part of the pre-registered protocol (config:
-`experiments/configs/E2-lan.toml`). There the medians increase with the minimum timeout:
-36.1, 40.6, 67.7, 116.2, 186.5 ms. The 12–24 ms median is close to the paper's 35 ms
+`experiments/configs/E2-lan.toml`; results:
+`experiments/results/E2-lan/20261020T173608Z-066e4c1`). There the medians increase with
+the minimum timeout: 36.1, 40.6, 67.7, 126.3, 186.5 ms. The 12–24 ms median is close to the paper's 35 ms
 mean.
 
 **Decision.**

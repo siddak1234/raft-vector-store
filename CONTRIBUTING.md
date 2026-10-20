@@ -68,9 +68,11 @@ used only in `analysis/`.
 
 ## Experiment results
 
-- Results are written only by the experiment runner (`cargo xtask experiment`, added in
-  Phase 1). The runner refuses to start with uncommitted changes, so every result maps to
-  an exact commit.
+- Results are written only by the experiment runner (`cargo xtask validate` and
+  `cargo xtask experiment <id>`). The runner refuses to start with uncommitted changes, so
+  every result maps to an exact commit. Commit new results before starting the next run.
+- To try something out without making an official result, pass `--scratch <dir>` with a
+  folder outside the repository.
 - Existing results are never edited, moved, or deleted. To exclude a bad run, record it and
   the reason in the analysis code.
 - See `experiments/README.md` for the folder format.
