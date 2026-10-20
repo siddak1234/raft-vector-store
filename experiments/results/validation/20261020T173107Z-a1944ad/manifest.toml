@@ -1,0 +1,13 @@
+experiment = "validation"
+commit = "a1944adc25f39710edcbe46b2189545ee014f8ba"
+started = "2026-10-20T17:31:07Z"
+finished = "2026-10-20T17:31:58Z"
+trials = 10000
+official = true
+
+[machine]
+os = "macos"
+arch = "aarch64"
+cpu = "Apple M1 Pro"
+logical_cpus = 8
+rustc = "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
