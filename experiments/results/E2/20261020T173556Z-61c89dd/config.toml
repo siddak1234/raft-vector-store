@@ -1,0 +1,96 @@
+# E2: reproduction of the Raft paper's Figure 16 (docs/RESEARCH.md §6).
+# Five servers on the paper-like network; the heartbeat interval is half the minimum
+# election timeout. 150-300 ms belongs to both of the paper's graphs.
+
+id = "E2"
+description = "Time to replace a crashed leader across election timeout ranges"
+
+[[run]]
+scenario = "figure16"
+label = "150-150"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [150, 150]
+
+[[run]]
+scenario = "figure16"
+label = "150-151"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [150, 151]
+
+[[run]]
+scenario = "figure16"
+label = "150-155"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [150, 155]
+
+[[run]]
+scenario = "figure16"
+label = "150-175"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [150, 175]
+
+[[run]]
+scenario = "figure16"
+label = "150-200"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [150, 200]
+
+[[run]]
+scenario = "figure16"
+label = "150-300"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [150, 300]
+
+[[run]]
+scenario = "figure16"
+label = "12-24"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [12, 24]
+
+[[run]]
+scenario = "figure16"
+label = "25-50"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [25, 50]
+
+[[run]]
+scenario = "figure16"
+label = "50-100"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [50, 100]
+
+[[run]]
+scenario = "figure16"
+label = "100-200"
+algorithm = "raft"
+servers = 5
+network = "paper"
+seeds = [1, 1000]
+election_timeout_ms = [100, 200]
