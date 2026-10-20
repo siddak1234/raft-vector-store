@@ -34,7 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes only full version tags, not a floating major tag.
+      - uses: astral-sh/setup-uv@v10.3.0
       - name: Check the lockfile
         working-directory: analysis
         run: uv lock --check
