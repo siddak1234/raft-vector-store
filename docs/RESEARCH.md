@@ -344,7 +344,70 @@ Data collection never stops early, and trials are never added after looking at r
 
 ## Amendments
 
-None.
+### A1. 2026-10-20: Implementation details fixed before data collection
+
+These details were not specified above. They were fixed in code before any official data
+was collected, and they apply to both algorithms.
+
+1. **Clients.** Closed-loop clients send 128-byte commands over the simulated network with
+   the delay model of §3. Partitions, loss, and duplication affect only links between
+   servers.
+   - A client waits 500 ms for a reply, then retries at a random server.
+   - A server that knows the leader redirects the client to it, and the client resends
+     immediately.
+   - If the server does not know the leader, the client waits 50 ms and retries at a
+     random server.
+2. **Message counts.** M4, M9, and M10 count consensus messages between servers. Client
+   traffic is the same for both algorithms and is not counted.
+3. **Heartbeat rounds.** Messages that carry heartbeats, and their replies, include a round
+   number in both algorithms (Raft: `AppendEntries`; Multi-Paxos: `Accept` and
+   `Accepted`). The leader uses it to tell which replies answer heartbeats sent after a
+   leadership confirmation request.
+4. **Raft flow control.** The leader tracks each follower in one of two modes, as in etcd's
+   Raft library:
+   - **Probing:** one `AppendEntries` at a time. After a rejection it moves back one entry,
+     as in Figure 2, or to the follower's last index + 1 if that is lower.
+   - **Replicating:** entries are sent ahead of acknowledgments, up to the in-flight limit.
+
+   Each reply echoes the `prev_log_index` it answers, so stale rejections are ignored. The
+   term-based backtracking of §5.3 stays disabled. Without this, a single lost message
+   caused a storm of resends (`docs/BUGLOG.md`).
+5. **Delivering entries to a subset (E2, E3).** The procedure drops, from the leader to
+   followers outside the subset, only messages that carry log entries
+   (`Consensus::entry_count > 0`). Messages without entries, such as heartbeats, still
+   reach every follower.
+6. **E2 details.**
+   - Each follower is in the subset independently with probability 1/2.
+   - At the random instant, the leader appends the command, sends heartbeats to every
+     follower, and crashes, all at the same simulated time.
+   - Servers first start at times spread uniformly over 0–300 ms. With no randomness in
+     the timeouts (150–150 ms), servers that start at the same instant split their votes
+     forever and never elect a first leader. Only the election after the crash is
+     measured.
+   - The real-cluster run of E2 is done in Phase 3, when the real cluster exists.
+7. **E3 details.**
+   - The leader crashes at a time drawn uniformly from 1–2 s after its no-op is committed.
+   - The new leader's no-op is identified as the last entry in its log at the moment it
+     is elected; both algorithms append it there.
+8. **Validation campaign (§9.1).** The run parameters:
+   - **Cluster sizes:** odd seeds use 3 servers, even seeds 5.
+   - **Fault window:** faults run from 1 s to 45 s. A new fault starts after a gap
+     uniform in 0–2 s, and each fault lasts 100 ms to 5 s.
+   - **Fault types:**
+     - a crash between inputs
+     - a crash during an input
+     - a crash of the current leader
+     - a two-sided partition
+     - a one-way link failure
+     - 5%, 20%, or 50% message loss
+     - 10% duplication
+     - delays three or ten times normal
+   - **After the faults:**
+     - Liveness requires a command sent after 45 s to commit by 55 s.
+     - Clients stop at 57 s, and durability is checked at 60 s.
+   - **Log matching:** checked every 5 s and at the end.
+9. **A/A test (§9.2).** The simulator part is done in Phase 1. The real-cluster part is done
+   in Phase 3, when the real cluster exists.
 
 ## References
 

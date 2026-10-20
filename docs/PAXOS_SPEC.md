@@ -214,7 +214,13 @@ Membership changes, log compaction, and snapshots. The Raft implementation omits
 
 ## Amendments
 
-None.
+### A1. 2026-10-20: Heartbeat round numbers
+
+`Accept` and `Accepted` carry a `round` number, as Raft's `AppendEntries` and its reply do.
+The leader starts a new round with every heartbeat and with every leadership confirmation
+request. Rule 4 under Leaders counts only `Accepted` replies whose round is at least the
+request's round. The research protocol records the same detail (`docs/RESEARCH.md`,
+amendment A1.3).
 
 ## References
 
