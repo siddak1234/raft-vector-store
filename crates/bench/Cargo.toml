@@ -1,0 +1,18 @@
+[package]
+name = "bench"
+version = "0.1.0"
+description = "Experiment runner"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+consensus.workspace = true
+raft.workspace = true
+paxos.workspace = true
+sim.workspace = true
+
+[lints]
+workspace = true

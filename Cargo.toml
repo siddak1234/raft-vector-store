@@ -1,0 +1,31 @@
+[workspace]
+members = ["crates/*", "xtask"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/siddak1234/raft-vector-store"
+publish = false
+
+# Every dependency version is declared once here. Crates refer to an entry with
+# `name.workspace = true`. Add a dependency in the pull request that first uses it.
+[workspace.dependencies]
+# Workspace crates. `bench` and `xtask` are not listed because no crate may depend on them.
+client = { path = "crates/client" }
+consensus = { path = "crates/consensus" }
+controlplane = { path = "crates/controlplane" }
+datanode = { path = "crates/datanode" }
+modelcheck = { path = "crates/modelcheck" }
+paxos = { path = "crates/paxos" }
+raft = { path = "crates/raft" }
+rpc = { path = "crates/rpc" }
+sim = { path = "crates/sim" }
+
+# External crates
+serde_json = "1.0.154"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"

@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history, so check-repo can compare experiment results against origin/main.
+          fetch-depth: 0
+      - name: Install the pinned toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Repository rules
+        run: cargo xtask check-repo
+
+  analysis:
+    name: analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Check the lockfile
+        working-directory: analysis
+        run: uv lock --check

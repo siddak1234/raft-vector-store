@@ -1,0 +1,6 @@
+[project]
+name = "analysis"
+version = "0.1.0"
+description = "Statistics and figures for the Raft vs. Multi-Paxos experiments"
+requires-python = ">=3.13,<3.14"
+dependencies = []

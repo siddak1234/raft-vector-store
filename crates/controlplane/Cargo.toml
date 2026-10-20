@@ -1,0 +1,18 @@
+[package]
+name = "controlplane"
+version = "0.1.0"
+description = "Control-plane server"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+consensus.workspace = true
+raft.workspace = true
+paxos.workspace = true
+rpc.workspace = true
+
+[lints]
+workspace = true
