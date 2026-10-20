@@ -219,6 +219,7 @@ pub struct Simulation<C: Consensus, O: Observer<C> = ()> {
     confirmations: Vec<Confirmation>,
     max_log_gaps: u64,
     direct_seq: u64,
+    clients_stopped: bool,
     events: u64,
     observer: O,
 }
@@ -286,6 +287,7 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
             confirmations: Vec::new(),
             max_log_gaps: 0,
             direct_seq: 0,
+            clients_stopped: false,
             events: 0,
             observer,
         };
@@ -342,6 +344,13 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
     /// Schedules a fault for time `at`.
     pub fn schedule(&mut self, at: SimTime, fault: Fault) {
         self.queue.push(at.max(self.now), Event::Fault(fault));
+    }
+
+    /// Stops clients from sending new commands. Commands already sent still complete. Call
+    /// it before [`check_durability`](Self::check_durability), so that the last
+    /// acknowledged commands have time to reach every server.
+    pub fn stop_clients(&mut self) {
+        self.clients_stopped = true;
     }
 
     /// Adds a rule that drops matching messages until [`clear_drop_rules`](Self::clear_drop_rules).
@@ -506,7 +515,8 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
     }
 
     /// Checks that every server has applied every acknowledged command. Call it at the
-    /// end of a run, after faults have stopped and servers have had time to catch up.
+    /// end of a run, after faults have stopped, clients have stopped
+    /// ([`stop_clients`](Self::stop_clients)), and servers have had time to catch up.
     pub fn check_durability(&mut self) {
         let applied: Vec<(NodeId, u64)> = self
             .servers
@@ -830,7 +840,7 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
 
     fn client_send(&mut self, client: usize) {
         let state = &mut self.clients[client];
-        if state.outstanding.is_some() {
+        if self.clients_stopped || state.outstanding.is_some() {
             return;
         }
         state.outstanding = Some(Outstanding {
