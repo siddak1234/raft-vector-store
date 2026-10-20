@@ -23,7 +23,7 @@ We use the system to test claims from the Raft paper (Ongaro & Ousterhout, 2014)
 | RQ1 | Do Raft and Multi-Paxos differ in commit latency or throughput with a stable leader? | No. They are equivalent within a ±5% margin. | Both commit with one round trip from the leader to a majority (Raft abstract, §9.3) |
 | RQ2 | How do they differ when the leader fails? | Paxos election traffic grows with the number of uncommitted entries; Raft's does not. Which one recovers faster is an open question. | The algorithms differ only in leader election (Howard & Mortier) |
 | RQ3 | Does a new Raft leader re-send fewer log entries? | Yes | Raft §5.4.2 |
-| RQ4 | Does Raft keep logs more coherent and reach fewer states? | Yes: fewer reachable states, no log holes, no entries sent to the leader | Raft §4, §5.3, §5.4.1 |
+| RQ4 | Does Raft keep logs more coherent and reach fewer states? | Yes: fewer reachable states, no log gaps, no entries sent to the leader | Raft §4, §5.3, §5.4.1 |
 | RQ5 | Is Raft's implementation smaller, with less overlap between election, replication, and safety code? | Yes: fewer message types and lower code complexity | Raft §4, §10 |
 | RQ6 | Does the choice of algorithm change how fast the vector store recovers from failures? | Only when the control-plane leader fails at the same time | Follows from RQ1 and RQ2 |
 
@@ -49,35 +49,50 @@ path is the same in both builds.
 
 ### 4.1 Consensus Interface
 
-Both algorithms implement one trait. The consensus code does no I/O and never reads the
-clock. The caller delivers messages and timer events, then carries out the returned
-outputs. The deterministic simulator, the model checker, and the networked server all
-drive the same code.
+Both algorithms implement one trait, defined in `crates/consensus`. The consensus code
+does no I/O, never reads the clock, and draws random numbers only from a seeded `Rng`. A
+driver delivers inputs and carries out the returned outputs. The deterministic simulator,
+the model checker, and the networked server are all drivers, so the same algorithm code
+runs in each.
 
 ```rust
-/// A consensus module with no I/O. Callers deliver inputs and execute the returned outputs.
-pub trait Consensus {
-    type Message: Clone + Serialize + DeserializeOwned;
+pub trait Consensus: Sized {
+    type Message: Clone + Debug + Eq + Hash + Serialize + DeserializeOwned;
 
-    /// Handles a message from another server.
-    fn step(&mut self, from: NodeId, msg: Self::Message) -> Vec<Output<Self::Message>>;
-
-    /// Handles an expired timer (election timeout or heartbeat).
-    fn on_timer(&mut self, timer: Timer) -> Vec<Output<Self::Message>>;
-
-    /// Submits a client command. Returns `NotLeader` if this server is not the leader.
-    fn propose(&mut self, cmd: Command) -> Result<Vec<Output<Self::Message>>, NotLeader>;
+    fn start<S: Storage>(id: NodeId, cluster: &[NodeId], config: &Config, seed: u64,
+                         storage: &mut S) -> (Self, Vec<Output<Self::Message>>);
+    fn step<S: Storage>(&mut self, storage: &mut S, from: NodeId, message: Self::Message)
+        -> Vec<Output<Self::Message>>;
+    fn on_timer<S: Storage>(&mut self, storage: &mut S, timer: Timer)
+        -> Vec<Output<Self::Message>>;
+    fn propose<S: Storage>(&mut self, storage: &mut S, command: Command)
+        -> Result<Vec<Output<Self::Message>>, NotLeader>;
+    fn confirm_leadership(&mut self, request: RequestId)
+        -> Result<Vec<Output<Self::Message>>, NotLeader>;
+    fn status(&self) -> Status;
+    fn message_kind(message: &Self::Message) -> &'static str;
+    fn entry_count(message: &Self::Message) -> usize;
 }
 
 pub enum Output<M> {
-    Send { to: NodeId, msg: M },
+    Send { to: NodeId, message: M },
     SetTimer { timer: Timer, after: Duration },
-    Apply { index: LogIndex, cmd: Command },
+    CancelTimer { timer: Timer },
+    Apply { index: LogIndex, payload: Payload },
+    LeadershipConfirmed { request: RequestId, read_index: LogIndex },
+    LeadershipLost { request: RequestId },
 }
 ```
 
-Persistent state goes through a shared `Storage` trait. It flushes to disk before any
-output that depends on that state is returned.
+- **Storage:** `Storage` holds the hard state (term and vote) and a log that may have
+  gaps, since Multi-Paxos accepts entries at any index.
+- **Persistence rule:** after every input, the driver calls `Storage::sync` before
+  carrying out any output. Both algorithms persist under the same rule, and fsyncs are
+  counted in shared code.
+- **Shared settings:** both algorithms take the same `Config` (heartbeat interval,
+  election timeout range, batch limits) and draw randomness from the same `Rng`.
+- **Message classification:** `message_kind` and `entry_count` let shared code count
+  messages by type and entries in transit without reading algorithm internals.
 
 ### 4.2 Raft
 
@@ -95,8 +110,10 @@ Our variant is based on Howard & Mortier's description, which uses Raft's termin
 that the comparison isolates leader election. Remaining details come from van Renesse &
 Altinbuken, *Paxos Made Moderately Complex*.
 
-- **Election:** any server can become leader. A candidate sends a prepare message with a
-  higher term (ballot) and its commit index.
+- **Terms:** each term belongs to one server (term `t` belongs to the server of rank
+  `t mod N`), so each term has at most one candidate.
+- **Election:** any server can become leader. A candidate moves to its next own term and
+  sends a prepare message with that term and its commit index.
 - **Promises:** each server that receives it promises to reject lower terms and returns
   the entries it holds after the candidate's commit index.
 - **Taking over:** with promises from a majority, the candidate becomes leader. For each
@@ -104,9 +121,12 @@ Altinbuken, *Paxos Made Moderately Complex*.
   Indexes with no entry are filled with no-ops.
 - **Steady state:** the leader sends each batch to all followers and commits it once a
   majority accept it. This is the same message pattern as Raft.
-- **Holes:** followers accept each index on its own, without Raft's consistency check, as
-  in classic Multi-Paxos. A follower's log can therefore have holes. Entries are applied
+- **Gaps:** followers accept each index on its own, without Raft's consistency check, as
+  in classic Multi-Paxos. A follower's log can therefore have gaps. Entries are applied
   in index order.
+- **Committing on followers:** a follower commits an index it holds in the leader's term
+  once the leader's commit index passes it. A follower missing chosen entries receives
+  them in a `Commit` message.
 
 The exact rules are written as a one-page summary in the style of Raft's Figure 2
 (`docs/PAXOS_SPEC.md`). Both team members review it before coding starts. After
@@ -199,10 +219,10 @@ These rules make the comparison apples to apples:
 
    | Setting | Value for both |
    |---|---|
-   | Tick length, heartbeat interval, election timeout range | Same |
+   | Heartbeat interval, election timeout range, random numbers | Same, from the shared `Config` and `Rng` |
    | Quorum | Majority |
-   | Batch size, max entries in flight | Same |
-   | fsync | Once per batch, before replying |
+   | Entries per message, entries in flight | Same (64 and 1024) |
+   | fsync | The driver syncs after every input, before any output |
    | No-op on new leader | Yes |
    | Optimized follower catch-up (§5.3) | Off |
    | PreVote, CheckQuorum, read leases, flexible quorums | Off |
@@ -222,7 +242,8 @@ These rules make the comparison apples to apples:
    full pipeline. The analysis must report no difference.
 8. **Analysis fixed in advance:**
    - **Sample sizes:** 1000 simulator trials per configuration, matching the paper, and
-     100 real-cluster runs per configuration.
+     100 real-cluster trials per configuration for the subsets listed in
+     `docs/RESEARCH.md` §6.
    - **Tests:**
      - Paired simulator runs: Wilcoxon signed-rank.
      - Real-cluster runs: Mann–Whitney U.
@@ -257,8 +278,8 @@ These rules make the comparison apples to apples:
   the committed reply.
 - **M8 Throughput:** commits per second at saturation.
 - **M9 Cost per commit:** messages and bytes per committed command.
-- **M10 Re-sent entries:** entries re-sent after a leader change, before the first new
-  commit.
+- **M10 Re-sent entries:** log entries carried in a new leader's messages, from its
+  election until its no-op entry is committed.
 - **M11 Catch-up time:** time for a follower to catch up after a restart or a healed
   partition.
 
@@ -271,8 +292,9 @@ These rules make the comparison apples to apples:
 
 - **M14 Reachable states:** unique reachable states (model checker, same limits for
   both).
-- **M15 Log holes:** holes observed.
-- **M16 Entries sent to the leader:** entries transferred from followers to a leader.
+- **M15 Log gaps:** indexes below a server's last index that hold no entry.
+- **M16 Entries sent toward a leader:** entries carried in messages delivered to a
+  candidate or leader.
 - **M17 Log divergence:** the largest number of entries a follower must discard.
 
 **Implementation**
@@ -302,23 +324,25 @@ These rules make the comparison apples to apples:
 | E7 Implementation | RQ5 | Static analysis of the frozen code; bug log | M18–M20 |
 | E8 Vector store recovery | RQ6 | Data-node primary crash, with and without a simultaneous control-plane leader crash | M21 |
 
-M12 and M13 are recorded in every experiment.
+M12 and M13 are recorded in every experiment. Full procedures, configurations, and
+decision rules are in `docs/RESEARCH.md` §6.
 
 ## 8. Phases
 
 ### Phase 0: Foundation and Research Protocol
 
-- [ ] Cargo workspace, crate skeletons, CI (`fmt`, `clippy`, `test`)
-- [ ] Build output (`target/`) and node data directories outside iCloud Drive
-- [ ] `Consensus` and `Storage` traits and shared types
-- [ ] `docs/RESEARCH.md`: research questions, hypotheses, metrics, experiments, sample
-      sizes, tests, margins
-- [ ] `docs/PAXOS_SPEC.md`: one-page Multi-Paxos specification
-- [ ] `docs/DESIGN.md`: lease and replication protocol with correctness argument
-- [ ] `docs/BUGLOG.md` started
+- [x] Cargo workspace, crate skeletons, CI (`fmt`, `clippy`, `test`)
+- [x] Repository rules: `CONTRIBUTING.md`, `cargo xtask check-repo`, protected `main`
+- [x] Build output (`target/`) and node data directories outside iCloud Drive
+- [x] `Consensus` and `Storage` traits and shared types
+- [x] `docs/RESEARCH.md`: hypotheses, metrics, experiment procedures, sample sizes, tests,
+      margins
+- [x] `docs/PAXOS_SPEC.md`: Multi-Paxos specification
+- [x] `docs/DESIGN.md`: lease and replication protocol with correctness argument
+- [x] `docs/BUGLOG.md` started
 
-**Exit:** CI passes. Both team members have reviewed and committed the three design
-documents.
+**Exit:** CI passes. Both team members have reviewed and merged the three design
+documents, and the merged commit is tagged `protocol-v1`.
 
 ### Phase 1: Simulator and Raft
 
@@ -329,8 +353,8 @@ documents.
 - [ ] A/A validation of the harness
 - [ ] E2 (Figure 16 reproduction) in the simulator
 
-**Exit:** thousands of seeds pass with zero violations. The A/A run shows no difference,
-and E2 results are recorded.
+**Exit:** seeds 1–10,000 pass with zero violations (`docs/RESEARCH.md` §9). The A/A run
+shows no difference, and E2 results are recorded.
 
 ### Phase 2: Multi-Paxos and State-Space Analysis
 
@@ -349,7 +373,7 @@ algorithms.
 - [ ] `--consensus` flag, static cluster config, leader redirect, shard map served by any
       server
 - [ ] Fault-injection and delay-injection admin commands
-- [ ] Launch scripts for 1, 3, and 5 servers; structured logs; metrics export
+- [ ] `cargo xtask cluster` for 1, 3, and 5 servers; structured logs; metrics export
 
 **Exit:** for both algorithms, writes resume after a `kill -9` of the leader, and a
 restarted server catches up.
@@ -382,14 +406,14 @@ violations in any run.
 
 ### Phase 6: Analysis and Report
 
-- [ ] Analysis scripts (Python: pandas, SciPy, matplotlib) that regenerate every figure
-      and table from raw results
+- [ ] Analysis code (Python: pandas, SciPy, matplotlib) that regenerates every figure and
+      table from raw results
 - [ ] Final report: background, design, method, results by research question, threats to
       validity, conclusion
 - [ ] Demo of live failover under both algorithms, and presentation slides
 
-**Exit:** report and slides are complete, and one script regenerates all figures from the
-repository.
+**Exit:** report and slides are complete, and `cargo xtask figures` regenerates all
+figures from the repository.
 
 ## 9. Repository Layout
 
@@ -400,16 +424,21 @@ crates/
   paxos/         Multi-Paxos
   sim/           deterministic simulator and checkers
   modelcheck/    Stateright adapter
+  rpc/           gRPC definitions, generated code, vector-store types
   controlplane/  metadata state machine and server binary
   datanode/      shard storage, replication, search
   client/        routing library and CLI
   bench/         experiment runner
-proto/           gRPC definitions
-scripts/         cluster launch and fault scripts
-experiments/     configs, schedules, raw results
-analysis/        statistics and plotting
-docs/            plan, research protocol, specs, bug log
+xtask/           project commands, run as `cargo xtask <command>`
+experiments/
+  configs/       experiment definitions
+  results/       raw results, written only by the experiment runner
+analysis/        statistics and plotting (Python, pinned with uv)
+docs/            plan, research protocol, Paxos specification, design, bug log
 ```
+
+Repository rules, including which crates may depend on which, are in `CONTRIBUTING.md`
+and enforced by `cargo xtask check-repo`.
 
 ## 10. Datasets
 
