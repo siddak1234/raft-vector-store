@@ -18,6 +18,13 @@ pub enum Fault {
     CrashDuringNextInput(NodeId),
     /// Restart a stopped server from its storage.
     Restart(NodeId),
+    /// Stop whichever server leads the highest term at that moment, and restart it after
+    /// `downtime`. Leader crashes create the histories that test the commit rule (Raft
+    /// §5.4.2, Figure 8).
+    CrashLeader {
+        /// How long the server stays down.
+        downtime: Duration,
+    },
     /// Block every link between servers in different groups, in both directions.
     Partition(Vec<Vec<NodeId>>),
     /// Block the link from one server to another, in that direction only.
@@ -69,9 +76,9 @@ const DELAY_FACTORS: [u64; 2] = [3, 10];
 
 /// Generates a random fault schedule for `servers`.
 ///
-/// Each fault is one of: a crash between inputs, a crash during an input, a two-sided
-/// partition, a one-way link failure, message loss, message duplication, or slower
-/// delivery. Each fault is undone after its duration, and every fault ends at
+/// Each fault is one of: a crash between inputs, a crash during an input, a crash of the
+/// current leader, a two-sided partition, a one-way link failure, message loss, message
+/// duplication, or slower delivery. Each fault is undone after its duration, and every fault ends at
 /// `config.end`. Only integer arithmetic is used, so the same generator state gives the
 /// same schedule on every machine.
 pub fn chaos_schedule(
@@ -93,7 +100,7 @@ pub fn chaos_schedule(
         let until = (time + duration).min(end);
         let server = pick(rng, servers);
 
-        match rng.below(7) {
+        match rng.below(8) {
             0 => {
                 schedule.push((time, Fault::Crash(server)));
                 schedule.push((until, Fault::Restart(server)));
@@ -134,6 +141,10 @@ pub fn chaos_schedule(
             5 => {
                 schedule.push((time, Fault::SetDuplication(100_000)));
                 schedule.push((until, Fault::SetDuplication(0)));
+            }
+            6 => {
+                let downtime = until - time;
+                schedule.push((time, Fault::CrashLeader { downtime }));
             }
             _ => {
                 let factor = DELAY_FACTORS[rng.below(DELAY_FACTORS.len() as u64) as usize];

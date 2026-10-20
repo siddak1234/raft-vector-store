@@ -18,6 +18,8 @@ pub enum Stream {
     Workload,
     /// Choices made by an experiment's procedure, such as which followers receive an entry.
     Scenario,
+    /// When each server first starts, if starts are spread out.
+    Startup,
     /// The random numbers of one server in one incarnation (its election timeouts).
     Server {
         /// The server.
@@ -34,6 +36,7 @@ impl Stream {
             Stream::Network => 2,
             Stream::Workload => 3,
             Stream::Scenario => 4,
+            Stream::Startup => 6,
             Stream::Server { id, incarnation } => {
                 (5 << 56) | (u64::from(incarnation) << 32) | (id.0 & 0xFFFF_FFFF)
             }
@@ -65,6 +68,7 @@ mod tests {
             Stream::Network,
             Stream::Workload,
             Stream::Scenario,
+            Stream::Startup,
             Stream::Server {
                 id: NodeId(1),
                 incarnation: 0,

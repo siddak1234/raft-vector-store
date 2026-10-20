@@ -40,6 +40,10 @@ pub struct SimConfig {
     pub count_bytes: bool,
     /// Whether to run the Raft-only checks: log matching and leader completeness.
     pub raft_checks: bool,
+    /// Servers first start at times drawn uniformly from `[0, start_spread)`. Zero starts
+    /// every server at time zero. A spread avoids the endless split votes that identical
+    /// start times cause when election timeouts have no randomness.
+    pub start_spread: Duration,
 }
 
 impl Default for SimConfig {
@@ -55,6 +59,7 @@ impl Default for SimConfig {
             client_backoff: Duration::from_millis(50),
             count_bytes: true,
             raft_checks: false,
+            start_spread: Duration::ZERO,
         }
     }
 }
@@ -126,6 +131,9 @@ pub struct Confirmation {
 }
 
 enum Event<M> {
+    Start {
+        slot: usize,
+    },
     Deliver {
         from: NodeId,
         to: NodeId,
@@ -291,8 +299,15 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
             events: 0,
             observer,
         };
+        let spread = crate::time::nanos(sim.config.start_spread);
+        let mut startup = stream_rng(seed, Stream::Startup);
         for slot in 0..sim.servers.len() {
-            sim.start_server(slot);
+            if spread == 0 {
+                sim.start_server(slot);
+            } else {
+                let at = SimTime::ZERO + Duration::from_nanos(startup.below(spread));
+                sim.queue.push(at, Event::Start { slot });
+            }
         }
         for client in 0..sim.clients.len() {
             sim.queue.push(SimTime::ZERO, Event::ClientSend { client });
@@ -723,6 +738,11 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
 
     fn process(&mut self, event: Event<C::Message>) {
         match event {
+            Event::Start { slot } => {
+                if self.servers[slot].node.is_none() && self.servers[slot].incarnation == 0 {
+                    self.start_server(slot);
+                }
+            }
             Event::Deliver { from, to, message } => self.deliver(from, to, message),
             Event::Timer {
                 slot,
@@ -808,6 +828,12 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
                 let slot = self.slot(id);
                 if self.servers[slot].node.is_none() {
                     self.restart_server(slot);
+                }
+            }
+            Fault::CrashLeader { downtime } => {
+                if let Some((leader, _)) = self.leader() {
+                    self.stop_server(self.slot(leader));
+                    self.schedule(self.now + downtime, Fault::Restart(leader));
                 }
             }
             Fault::Partition(groups) => self.network.partition(&groups),

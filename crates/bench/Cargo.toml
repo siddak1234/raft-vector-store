@@ -11,8 +11,9 @@ publish.workspace = true
 [dependencies]
 consensus.workspace = true
 raft.workspace = true
-paxos.workspace = true
+serde.workspace = true
 sim.workspace = true
+toml.workspace = true
 
 [lints]
 workspace = true

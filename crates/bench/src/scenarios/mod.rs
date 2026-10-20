@@ -1,0 +1,232 @@
+//! The experiment procedures (`docs/RESEARCH.md` §6 and §9).
+//!
+//! Each procedure runs one trial: one simulation with one seed. The procedures are generic
+//! over the algorithm, so Raft and Multi-Paxos follow exactly the same steps.
+
+pub mod failover;
+pub mod figure16;
+pub mod steady;
+pub mod validation;
+
+use std::collections::BTreeSet;
+use std::time::Duration;
+
+use consensus::{Config, Consensus, NodeId, Rng, Role, Storage, Term};
+use raft::Raft;
+use sim::{Observer, SimConfig, Simulation};
+
+use crate::algorithm::Algorithm;
+use crate::config::{ExperimentConfig, RunConfig, Scenario};
+use crate::results::{self, Output};
+use crate::runner::run_parallel;
+
+/// Size of every client command, in bytes (`docs/RESEARCH.md` §3).
+pub const COMMAND_BYTES: usize = 128;
+
+/// How long a trial may take to elect its first leader before it is recorded as not ready.
+const READY_DEADLINE: Duration = Duration::from_secs(30);
+
+/// Runs every trial of an experiment and writes one CSV file per scenario. `seed_limit`
+/// caps the number of seeds per run, for quick scratch runs.
+///
+/// # Errors
+///
+/// Returns a description of the problem if a run names an unknown algorithm or a file
+/// cannot be written.
+pub fn run_experiment(
+    config: &ExperimentConfig,
+    output: &Output,
+    seed_limit: Option<u64>,
+) -> Result<usize, String> {
+    for run in &config.run {
+        if run.algorithm != Raft::NAME {
+            return Err(format!(
+                "run {}: unknown algorithm `{}` (available: {})",
+                run.label,
+                run.algorithm,
+                Raft::NAME
+            ));
+        }
+    }
+    let jobs = |scenario: Scenario| -> Vec<(&RunConfig, u64)> {
+        config
+            .run
+            .iter()
+            .filter(|run| run.scenario == scenario)
+            .flat_map(|run| {
+                let seeds = run.seeds();
+                let limit = seed_limit.unwrap_or(u64::MAX) as usize;
+                seeds.take(limit).map(move |seed| (run, seed))
+            })
+            .collect()
+    };
+
+    let mut trials = 0;
+    let steady = jobs(Scenario::Steady);
+    if !steady.is_empty() {
+        eprintln!("steady: {} trials", steady.len());
+        let rows = run_parallel(&steady, 500, |(run, seed)| {
+            steady::trial::<Raft>(run, *seed)
+        });
+        results::write_csv(output, "steady.csv", &rows)?;
+        trials += rows.len();
+    }
+    let figure16 = jobs(Scenario::Figure16);
+    if !figure16.is_empty() {
+        eprintln!("figure16: {} trials", figure16.len());
+        let rows = run_parallel(&figure16, 1000, |(run, seed)| {
+            figure16::trial::<Raft>(run, *seed)
+        });
+        results::write_csv(output, "figure16.csv", &rows)?;
+        trials += rows.len();
+    }
+    let failover = jobs(Scenario::Failover);
+    if !failover.is_empty() {
+        eprintln!("failover: {} trials", failover.len());
+        let rows = run_parallel(&failover, 500, |(run, seed)| {
+            failover::trial::<Raft>(run, *seed)
+        });
+        results::write_csv(output, "failover.csv", &rows)?;
+        trials += rows.len();
+    }
+    Ok(trials)
+}
+
+/// Simulator settings for a run. The heartbeat interval is half the minimum election
+/// timeout (`docs/RESEARCH.md` §3).
+fn sim_config<A: Algorithm>(run: &RunConfig, clients: usize, count_bytes: bool) -> SimConfig {
+    let mut consensus = Config::default();
+    if let Some([min, max]) = run.election_timeout_ms {
+        consensus.election_timeout_min = Duration::from_millis(min);
+        consensus.election_timeout_max = Duration::from_millis(max);
+        consensus.heartbeat_interval = Duration::from_millis(min) / 2;
+    }
+    SimConfig {
+        servers: run.servers,
+        consensus,
+        one_way_delay: run.network.one_way_delay(),
+        clients,
+        command_bytes: COMMAND_BYTES,
+        count_bytes,
+        raft_checks: A::RAFT_CHECKS,
+        ..SimConfig::default()
+    }
+}
+
+/// Starts a simulation and runs it until a leader has committed an entry from its own
+/// term (its no-op). Returns `None` if that does not happen within the deadline.
+fn start_ready<A: Algorithm>(config: SimConfig, seed: u64) -> Option<Simulation<A, A::Observer>> {
+    let mut sim = Simulation::with_observer(config, seed, A::Observer::default());
+    let deadline = sim.now() + READY_DEADLINE;
+    sim.run_until_condition(deadline, leader_ready)
+        .then_some(sim)
+}
+
+/// Whether some leader has committed an entry from its own term. Both algorithms append a
+/// no-op on election, so this means the leader's no-op is committed.
+fn leader_ready<C: Consensus, O: Observer<C>>(sim: &Simulation<C, O>) -> bool {
+    let Some((leader, term)) = sim.leader() else {
+        return false;
+    };
+    let Some(status) = sim.status(leader) else {
+        return false;
+    };
+    status.commit_index.0 > 0
+        && sim
+            .storage(leader)
+            .entry(status.commit_index)
+            .map(|e| e.term)
+            == Some(term)
+}
+
+/// Adds the term of every current candidate to `terms` (metric M3).
+fn record_candidates<C: Consensus, O: Observer<C>>(
+    sim: &Simulation<C, O>,
+    terms: &mut BTreeSet<Term>,
+) {
+    for &id in sim.ids() {
+        if let Some(status) = sim.status(id)
+            && status.role == Role::Candidate
+        {
+            terms.insert(status.term);
+        }
+    }
+}
+
+/// The followers of `leader`, in random order.
+fn shuffled_followers(ids: &[NodeId], leader: NodeId, rng: &mut Rng) -> Vec<NodeId> {
+    let mut followers: Vec<NodeId> = ids.iter().copied().filter(|&id| id != leader).collect();
+    for i in (1..followers.len()).rev() {
+        let j = rng.below(i as u64 + 1) as usize;
+        followers.swap(i, j);
+    }
+    followers
+}
+
+fn ms(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
+}
+
+/// The median of sorted values; the mean of the two middle values for an even count.
+fn median(sorted: &[f64]) -> f64 {
+    match sorted.len() {
+        0 => f64::NAN,
+        n if n % 2 == 1 => sorted[n / 2],
+        n => (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0,
+    }
+}
+
+/// The nearest-rank percentile of sorted values, for `p` in (0, 100].
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    if sorted.is_empty() {
+        return f64::NAN;
+    }
+    let rank = (p / 100.0 * sorted.len() as f64).ceil() as usize;
+    sorted[rank.clamp(1, sorted.len()) - 1]
+}
+
+/// The columns that describe a run, written at the start of every result row.
+fn run_columns(run: &RunConfig) -> String {
+    let [min, max] = run.election_timeout_ms.unwrap_or([150, 300]);
+    format!(
+        "{},{},{},{},{},{},{min},{max},{}",
+        run.label,
+        run.arm,
+        run.algorithm,
+        run.servers,
+        run.network.name(),
+        run.clients,
+        run.uncommitted
+    )
+}
+
+const RUN_HEADER: &str = "label,arm,algorithm,servers,network,clients,election_timeout_min_ms,election_timeout_max_ms,uncommitted";
+
+fn optional(value: Option<f64>) -> String {
+    value.map(results::number).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use consensus::{NodeId, Rng};
+
+    use super::{median, percentile, shuffled_followers};
+
+    #[test]
+    fn median_and_percentile() {
+        assert_eq!(median(&[1.0, 2.0, 3.0]), 2.0);
+        assert_eq!(median(&[1.0, 2.0, 3.0, 4.0]), 2.5);
+        let values: Vec<f64> = (1..=100).map(f64::from).collect();
+        assert_eq!(percentile(&values, 99.0), 99.0);
+        assert_eq!(percentile(&values, 100.0), 100.0);
+        assert_eq!(percentile(&[5.0], 99.0), 5.0);
+    }
+
+    #[test]
+    fn shuffle_excludes_the_leader() {
+        let ids: Vec<NodeId> = (1..=5).map(NodeId).collect();
+        let followers = shuffled_followers(&ids, NodeId(3), &mut Rng::new(1));
+        assert_eq!(followers.len(), 4);
+        assert!(!followers.contains(&NodeId(3)));
+    }
+}
