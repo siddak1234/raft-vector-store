@@ -36,7 +36,8 @@ used only in `analysis/`.
 ## Branches and pull requests
 
 - `main` is protected. Every change reaches it through a pull request.
-- A pull request needs passing CI and an approval from the other team member.
+- A pull request needs passing CI to merge. Reviews are welcome but not required; the
+  author may merge their own pull request.
 - Name branches by area, such as `phase0/scaffold`, `raft/election`, or `sim/faults`.
 - Keep each pull request to one change. Pull requests are squash-merged, so `main` has one
   commit per change.
