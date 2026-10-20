@@ -1,0 +1,15 @@
+[package]
+name = "datanode"
+version = "0.1.0"
+description = "Data node: shard storage, replication, and search"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+rpc.workspace = true
+
+[lints]
+workspace = true

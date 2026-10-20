@@ -1,0 +1,15 @@
+[package]
+name = "sim"
+version = "0.1.0"
+description = "Deterministic simulator and checkers"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+consensus.workspace = true
+
+[lints]
+workspace = true

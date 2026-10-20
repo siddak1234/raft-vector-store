@@ -18,10 +18,24 @@ coherency.
 Only metadata goes through consensus. Vector data goes from clients straight to the data
 nodes, where each shard is replicated from a primary to its backups.
 
+## Getting Started
+
+1. Install Rust with [rustup](https://rustup.rs) and [uv](https://docs.astral.sh/uv/).
+2. Clone the repository outside any synced folder, such as iCloud Drive.
+3. Run `cargo xtask ci` to build the workspace and run every check.
+
+`cargo xtask help` lists all project commands.
+
 ## Documents
 
 - [Project plan](docs/PLAN.md): research questions, design, metrics, experiments, and
   phases
+- [Contributing](CONTRIBUTING.md): repository rules, branches, and pull requests
+- [Bug log](docs/BUGLOG.md): bugs found during development
+
+## License
+
+[MIT](LICENSE)
 
 ## References
 

@@ -1,3 +1,15 @@
+# Build output
+/target/
+
+# Analysis environment and generated figures
+/analysis/.venv/
+/analysis/figures/
+__pycache__/
+
+# Datasets are stored outside the repository
+*.hdf5
+*.h5
+
 # macOS
 .DS_Store
 
