@@ -1,0 +1,98 @@
+# Exploratory, not part of the pre-registered protocol: E2 repeated on the LAN-like
+# network, where Raft's timing requirement (broadcast time much shorter than the election
+# timeout) holds even for 12-24 ms. Added after E2's R2 criterion failed on the paper-like
+# network, to check whether the simulator reproduces the paper's pattern when the
+# requirement holds (docs/RESEARCH.md amendment A2).
+
+id = "E2-lan"
+description = "Exploratory: E2 on the LAN-like network"
+
+[[run]]
+scenario = "figure16"
+label = "150-150"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [150, 150]
+
+[[run]]
+scenario = "figure16"
+label = "150-151"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [150, 151]
+
+[[run]]
+scenario = "figure16"
+label = "150-155"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [150, 155]
+
+[[run]]
+scenario = "figure16"
+label = "150-175"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [150, 175]
+
+[[run]]
+scenario = "figure16"
+label = "150-200"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [150, 200]
+
+[[run]]
+scenario = "figure16"
+label = "150-300"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [150, 300]
+
+[[run]]
+scenario = "figure16"
+label = "12-24"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [12, 24]
+
+[[run]]
+scenario = "figure16"
+label = "25-50"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [25, 50]
+
+[[run]]
+scenario = "figure16"
+label = "50-100"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [50, 100]
+
+[[run]]
+scenario = "figure16"
+label = "100-200"
+algorithm = "raft"
+servers = 5
+network = "lan"
+seeds = [1, 1000]
+election_timeout_ms = [100, 200]

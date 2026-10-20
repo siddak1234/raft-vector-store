@@ -1,0 +1,14 @@
+experiment = "E2-lan"
+config = "experiments/configs/E2-lan.toml"
+commit = "066e4c1c60c315f4ea82bf988bd57c2e191ceee2"
+started = "2026-10-20T17:36:08Z"
+finished = "2026-10-20T17:36:09Z"
+trials = 10000
+official = true
+
+[machine]
+os = "macos"
+arch = "aarch64"
+cpu = "Apple M1 Pro"
+logical_cpus = 8
+rustc = "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
