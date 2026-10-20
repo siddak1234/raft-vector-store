@@ -67,7 +67,7 @@ pub trait Consensus: Sized {
         -> Vec<Output<Self::Message>>;
     fn propose<S: Storage>(&mut self, storage: &mut S, command: Command)
         -> Result<Vec<Output<Self::Message>>, NotLeader>;
-    fn confirm_leadership(&mut self, request: RequestId)
+    fn confirm_leadership<S: Storage>(&mut self, storage: &mut S, request: RequestId)
         -> Result<Vec<Output<Self::Message>>, NotLeader>;
     fn status(&self) -> Status;
     fn message_kind(message: &Self::Message) -> &'static str;

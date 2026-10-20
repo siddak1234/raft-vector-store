@@ -80,8 +80,9 @@ impl Consensus for Solo {
         Ok(vec![Output::Apply { index, payload }])
     }
 
-    fn confirm_leadership(
+    fn confirm_leadership<S: Storage>(
         &mut self,
+        _storage: &mut S,
         request: RequestId,
     ) -> Result<Vec<Output<NoMessage>>, NotLeader> {
         Ok(vec![Output::LeadershipConfirmed {
@@ -152,7 +153,9 @@ fn leadership_confirmation_reports_the_commit_index() {
     solo.propose(&mut storage, command(1)).expect("leader");
     storage.sync();
 
-    let outputs = solo.confirm_leadership(RequestId(7)).expect("leader");
+    let outputs = solo
+        .confirm_leadership(&mut storage, RequestId(7))
+        .expect("leader");
     assert_eq!(
         outputs,
         vec![Output::LeadershipConfirmed {

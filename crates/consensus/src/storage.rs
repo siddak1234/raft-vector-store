@@ -110,6 +110,17 @@ impl MemStorage {
         self.pending.clear();
     }
 
+    /// Returns the number of entries in the log. With gaps, this is less than
+    /// [`last_index`](Storage::last_index).
+    pub fn len(&self) -> usize {
+        self.current.log.len()
+    }
+
+    /// Returns `true` if the log holds no entries.
+    pub fn is_empty(&self) -> bool {
+        self.current.log.is_empty()
+    }
+
     fn write(&mut self, write: Write) {
         self.current.apply(write.clone());
         self.pending.push(write);

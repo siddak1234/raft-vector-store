@@ -67,15 +67,16 @@ pub trait Consensus: Sized {
     ) -> Result<Vec<Output<Self::Message>>, NotLeader>;
 
     /// Asks the leader to confirm that it still leads by exchanging heartbeats with a
-    /// majority (Raft §8). The answer arrives later as [`Output::LeadershipConfirmed`] or
+    /// majority (Raft §8). Storage is passed because the heartbeats carry log positions. The answer arrives later as [`Output::LeadershipConfirmed`] or
     /// [`Output::LeadershipLost`] with the same `request`. Used for leader-confirmed reads
     /// and for data-node lease renewals (`docs/DESIGN.md`).
     ///
     /// # Errors
     ///
     /// Returns [`NotLeader`] if this server is not the leader.
-    fn confirm_leadership(
+    fn confirm_leadership<S: Storage>(
         &mut self,
+        storage: &mut S,
         request: RequestId,
     ) -> Result<Vec<Output<Self::Message>>, NotLeader>;
 
