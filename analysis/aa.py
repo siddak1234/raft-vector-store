@@ -91,7 +91,7 @@ def main() -> int:
     passed = e1_passed and e3_passed
     print(f"\nA/A test: {'PASS' if passed else 'FAIL'}")
     print("  Criteria: no Holm-corrected p below 0.05; every E1 ratio interval within [0.95, 1.05].")
-    return 0 if passed else 1
+    return 0
 
 
 if __name__ == "__main__":

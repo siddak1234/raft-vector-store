@@ -409,6 +409,48 @@ was collected, and they apply to both algorithms.
 9. **A/A test (§9.2).** The simulator part is done in Phase 1. The real-cluster part is done
    in Phase 3, when the real cluster exists.
 
+### A2. 2026-10-20: E2 outcome and decision
+
+**Outcome.** R1 passed. R2 failed between the two shortest ranges.
+
+| Timeout range | Median time without a leader |
+|---|---|
+| 12–24 ms | 73.3 ms |
+| 25–50 ms | 69.2 ms |
+| 50–100 ms | 91.2 ms |
+| 100–200 ms | 149.9 ms |
+| 150–300 ms | 210.8 ms |
+
+Results: `experiments/results/E2/20261020T173244Z-99054ab`.
+
+**Cause.** On the paper-like network, a round trip takes 7.5–22.5 ms (mean 15 ms). That is
+longer than the shortest election timeouts in the 12–24 ms range. This breaks Raft's
+timing requirement, broadcastTime ≪ electionTimeout (§5.6), as the paper notes for this
+range (§9.3). Candidates time out before their vote requests are answered, so elections
+split.
+
+| Timeout range | Trials that elected a leader in the first round | Median rounds |
+|---|---|---|
+| 12–24 ms | 6.9% | 4 |
+| 25–50 ms | 33.2% | 2 |
+| 150–300 ms | 66.4% | 1 |
+
+**Check of the simulator.** An exploratory run repeated E2 on the LAN-like network (mean
+round trip 1 ms), where the timing requirement holds. It was decided after seeing the
+result and is not part of the pre-registered protocol (config:
+`experiments/configs/E2-lan.toml`). There the medians increase with the minimum timeout:
+36.1, 40.6, 67.7, 116.2, 186.5 ms. The 12–24 ms median is close to the paper's 35 ms
+mean.
+
+**Decision.**
+
+- The simulator is treated as valid. It reproduces the paper's pattern wherever the timing
+  requirement holds, and the failure follows from the pre-registered network model, not
+  from a defect.
+- R2 is reported as failed, not redefined.
+- The comparison experiments (E1, E3–E5) use 150–300 ms timeouts, where the requirement
+  holds, so they are unaffected.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm
