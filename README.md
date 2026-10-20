@@ -30,7 +30,7 @@ nodes, where each shard is replicated from a primary to its backups.
 
 - [Project plan](docs/PLAN.md): research questions, design, metrics, experiments, and
   phases
-- [Contributing](CONTRIBUTING.md): repository rules, branches, and pull requests
+- [Contributing](CONTRIBUTING.md): repository rules and workflow
 - [Bug log](docs/BUGLOG.md): bugs found during development
 
 ## License

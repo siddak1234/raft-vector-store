@@ -2,7 +2,7 @@
 
 These rules keep the code, the experiment data, and the documents we submit consistent and
 reproducible. `cargo xtask check-repo` enforces the ones that can be checked automatically,
-and CI runs it on every pull request.
+and CI runs it on every push to `main`.
 
 ## Setup
 
@@ -33,14 +33,15 @@ Every project task is a `cargo xtask` subcommand; `cargo xtask help` lists them.
 shell scripts or one-off tools. If a task is worth repeating, add it to `xtask`. Python is
 used only in `analysis/`.
 
-## Branches and pull requests
+## Workflow
 
-- `main` is protected. Every change reaches it through a pull request.
-- A pull request needs passing CI to merge. Reviews are welcome but not required; the
-  author may merge their own pull request.
-- Name branches by area, such as `phase0/scaffold`, `raft/election`, or `sim/faults`.
-- Keep each pull request to one change. Pull requests are squash-merged, so `main` has one
-  commit per change.
+- Commit directly to `main`. Run `cargo xtask ci` before every push; CI runs the same
+  checks again on GitHub after the push.
+- `main` cannot be force-pushed or deleted, so published history is never rewritten.
+- Pull `main` before starting work (`git pull --ff-only`) so commits stay in a straight
+  line.
+- A branch and pull request are optional, for a change you want the other person to look
+  at first.
 
 ## Commit messages
 
@@ -53,7 +54,7 @@ used only in `analysis/`.
 
 - Each external dependency's version is declared once, under `[workspace.dependencies]`
   in the root `Cargo.toml`. Crates refer to it with `name.workspace = true`.
-- Add a dependency in the pull request that first uses it.
+- Add a dependency in the commit that first uses it.
 - Dependency rules between crates:
   1. `consensus`, `raft`, `paxos`, `sim`, and `modelcheck` perform no I/O, so they may not
      use async or networking libraries.
@@ -83,7 +84,7 @@ that states the reason.
 ## Bugs
 
 Record every bug found in a consensus implementation or the test harness in
-`docs/BUGLOG.md`, in the same pull request as the fix. The bug log is metric M20.
+`docs/BUGLOG.md`, in the same commit as the fix. The bug log is metric M20.
 
 ## What `check-repo` enforces
 
@@ -94,6 +95,6 @@ Record every bug found in a consensus implementation or the test harness in
    `.tar`, `.gz`, `.tgz`) anywhere.
 5. No shell scripts or notebooks anywhere, and Python files only in `analysis/`.
 6. `docs/` contains only Markdown, PNG, and SVG files.
-7. Files under `experiments/results/` that exist on `main` are not modified, renamed, or
+7. Files already committed under `experiments/results/` are not modified, renamed, or
    deleted.
 8. Crate dependencies follow the rules above.

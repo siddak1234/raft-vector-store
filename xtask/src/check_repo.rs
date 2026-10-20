@@ -392,23 +392,33 @@ fn parse_metadata(json: &str) -> Result<Vec<Package>, String> {
         .collect()
 }
 
-/// Lists changes under `RESULTS_DIR` relative to `origin/main`, including uncommitted ones.
-/// Returns no changes when `origin/main` is not available, such as in a fresh local repo.
+/// Lists changes under `RESULTS_DIR` since a base commit, including uncommitted ones.
+///
+/// The base is `$CHECK_REPO_BASE` if set, otherwise `origin/main`. Locally, `origin/main`
+/// covers every commit not yet pushed. CI sets the variable to the commit before the push,
+/// because after a push `origin/main` already includes it. Returns no changes when the base
+/// is not available, such as in a fresh local repo.
 fn result_changes(root: &Path) -> Result<Vec<Change>, String> {
-    let has_main = Command::new("git")
-        .args(["rev-parse", "--verify", "--quiet", "origin/main"])
+    let base = std::env::var("CHECK_REPO_BASE").unwrap_or_else(|_| "origin/main".to_string());
+    let has_base = Command::new("git")
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{base}^{{commit}}"),
+        ])
         .current_dir(root)
         .output()
         .is_ok_and(|output| output.status.success());
-    if !has_main {
-        println!("check-repo: origin/main not found, skipping the results check");
+    if !has_base {
+        println!("check-repo: {base} not found, skipping the results check");
         return Ok(Vec::new());
     }
 
     let mut changes = Vec::new();
-    // Committed changes on this branch, then uncommitted changes in the working tree.
-    for range in ["origin/main...HEAD", "HEAD"] {
-        let output = git(root, &["diff", "--name-status", range, "--", RESULTS_DIR])?;
+    // Commits since the base, then uncommitted changes in the working tree.
+    for range in [format!("{base}...HEAD"), "HEAD".to_string()] {
+        let output = git(root, &["diff", "--name-status", &range, "--", RESULTS_DIR])?;
         changes.extend(parse_name_status(&output));
     }
     Ok(changes)

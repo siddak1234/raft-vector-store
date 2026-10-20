@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # Full history, so check-repo can compare experiment results against origin/main.
+          # Full history, so check-repo can compare experiment results with earlier commits.
           fetch-depth: 0
       - name: Install the pinned toolchain
         run: rustup toolchain install
@@ -28,6 +28,10 @@ jobs:
         run: cargo test --workspace --locked
       - name: Repository rules
         run: cargo xtask check-repo
+        env:
+          # On a push, check results against the commit before the push; on a pull
+          # request, against main.
+          CHECK_REPO_BASE: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
 
   analysis:
     name: analysis

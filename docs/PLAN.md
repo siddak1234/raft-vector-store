@@ -332,7 +332,7 @@ decision rules are in `docs/RESEARCH.md` §6.
 ### Phase 0: Foundation and Research Protocol
 
 - [x] Cargo workspace, crate skeletons, CI (`fmt`, `clippy`, `test`)
-- [x] Repository rules: `CONTRIBUTING.md`, `cargo xtask check-repo`, protected `main`
+- [x] Repository rules: `CONTRIBUTING.md`, `cargo xtask check-repo`, CI on every push
 - [x] Build output (`target/`) and node data directories outside iCloud Drive
 - [x] `Consensus` and `Storage` traits and shared types
 - [x] `docs/RESEARCH.md`: hypotheses, metrics, experiment procedures, sample sizes, tests,
