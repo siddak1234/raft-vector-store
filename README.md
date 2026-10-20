@@ -1,4 +1,4 @@
-# Raft-Based Control Plane for a Fault-Tolerant Vector Store
+# Raft vs. Multi-Paxos on a Vector Store Control Plane
 
 ECE 382N – Distributed Systems, Fall 2026 course project.
 
@@ -6,39 +6,27 @@ ECE 382N – Distributed Systems, Fall 2026 course project.
 
 ## Overview
 
-We implement the [Raft consensus algorithm](https://raft.github.io/) and use it to
-replicate the coordinator of a sharded vector store. One coordinator server is a single
-point of failure, so we run it on 3 or 5 servers that form a fault-tolerant control
-plane.
+A sharded vector store needs a coordinator that tracks which collections exist, which
+data nodes are alive, and which nodes hold each shard. A single coordinator is a single
+point of failure, so we replicate it across 3 or 5 servers using a consensus algorithm.
 
-The control plane tracks the cluster's metadata:
+We build this control plane twice, once on Raft and once on Multi-Paxos, in Rust. Both
+versions share all code except the consensus module. This lets us compare the two
+algorithms directly and test the Raft paper's claims about efficiency, decomposition, and
+coherency.
 
-- which collections exist
-- which shard lives on which data node
-- which data nodes are alive
+Only metadata goes through consensus. Vector data goes from clients straight to the data
+nodes, where each shard is replicated from a primary to its backups.
 
-Every metadata change (for example, moving a shard to a new node) is appended to the
-leader's log, replicated to a majority, and applied in the same order on every server.
-If the leader crashes, the remaining servers elect a new one and no committed change is
-lost.
+## Documents
 
-As in Kafka and Qdrant, only metadata goes through Raft. Vector data is sent directly to
-the data nodes, so the leader never becomes a bottleneck for large writes.
-
-## Components
-
-1. **Raft:** leader election, log replication, and safety.
-2. **Control-plane state machine:** collections, shard-to-node assignments, and node
-   liveness, driven by the committed Raft log.
-3. **Data nodes:** store vector shards and answer similarity searches.
-
-## Evaluation
-
-- Crash the leader and partition the network, then check that every shard always has
-  exactly one owner.
-- Measure leader failover time in 3-node and 5-node clusters.
+- [Project plan](docs/PLAN.md): research questions, design, metrics, experiments, and
+  phases
 
 ## References
 
 - Raft website: https://raft.github.io/
-- Ongaro & Ousterhout, *In Search of an Understandable Consensus Algorithm* (USENIX ATC 2014)
+- Ongaro & Ousterhout, *In Search of an Understandable Consensus Algorithm (Extended
+  Version)*: https://raft.github.io/raft.pdf
+- Howard & Mortier, *Paxos vs Raft: Have We Reached Consensus on Distributed Consensus?*
+  (PaPoC 2020): https://arxiv.org/abs/2004.05074
