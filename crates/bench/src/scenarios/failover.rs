@@ -39,6 +39,8 @@ const CAP: Duration = Duration::from_secs(60);
 pub struct FailoverRow {
     run: String,
     seed: u64,
+    /// Whether the procedure ran: a first leader was elected, and a leader existed at the
+    /// moment of the crash. Trials that are not ready have no measurement.
     ready: bool,
     censored: bool,
     followers_with_entries: usize,
@@ -118,15 +120,16 @@ pub fn trial<A: Algorithm>(run: &RunConfig, seed: u64) -> FailoverRow {
     let Some(mut sim) = start_ready::<A>(sim_config::<A>(run, run.clients, true), seed) else {
         return row;
     };
-    row.ready = true;
     let mut rng = stream_rng(seed, Stream::Scenario);
 
     let wait = Duration::from_secs(1) + Duration::from_nanos(rng.below(1_000_000_000));
     sim.run_until(sim.now() + wait);
     let Some((leader, term)) = sim.leader() else {
+        // An election was in progress at the chosen instant, so there is no leader to crash.
         row.violations = sim.violation_count();
         return row;
     };
+    row.ready = true;
 
     let followers = shuffled_followers(sim.ids(), leader, &mut rng);
     let reached = rng.below(sim.ids().len() as u64) as usize;

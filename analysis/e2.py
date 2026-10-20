@@ -57,7 +57,7 @@ def plot(frame: pd.DataFrame, name: str, title: str) -> str:
     figure, (top, bottom) = plt.subplots(2, 1, figsize=(7, 7))
     for axis, labels, log in [(top, TOP, True), (bottom, BOTTOM, False)]:
         for label in labels:
-            times = np.sort(frame.loc[frame["label"] == label, "time_without_leader_ms"])
+            times = np.sort(frame.loc[frame["label"] == label, "time_without_leader_ms"].dropna())
             if len(times) == 0:
                 continue
             share = np.arange(1, len(times) + 1) / len(times) * 100

@@ -35,6 +35,8 @@ const START_SPREAD: Duration = Duration::from_millis(300);
 pub struct Figure16Row {
     run: String,
     seed: u64,
+    /// Whether the procedure ran: a first leader was elected, and a leader existed at the
+    /// moment of the crash. Trials that are not ready have no measurement.
     ready: bool,
     /// Time from the crash until a new leader is elected (metric M1), in milliseconds.
     time_without_leader_ms: f64,
@@ -91,15 +93,16 @@ pub fn trial<A: Algorithm>(run: &RunConfig, seed: u64) -> Figure16Row {
     let Some(mut sim) = start_ready::<A>(config, seed) else {
         return row;
     };
-    row.ready = true;
     let mut rng = stream_rng(seed, Stream::Scenario);
 
     let phase = Duration::from_nanos(rng.below(heartbeat.as_nanos() as u64));
     sim.run_until(sim.now() + phase);
     let Some((leader, term)) = sim.leader() else {
+        // An election was in progress at the chosen instant, so there is no leader to crash.
         row.violations = sim.violation_count();
         return row;
     };
+    row.ready = true;
 
     for follower in shuffled_followers(sim.ids(), leader, &mut rng) {
         if rng.below(2) == 0 {
