@@ -81,6 +81,14 @@ pub trait Consensus: Sized {
 
     /// Reports the server's current state, for checkers and metrics.
     fn status(&self) -> Status;
+
+    /// Returns the name of a message's type, such as `"AppendEntries"`, so shared code can
+    /// count messages by type (metrics M4, M9, and M18 in `docs/RESEARCH.md`).
+    fn message_kind(message: &Self::Message) -> &'static str;
+
+    /// Returns the number of log entries a message carries, so shared code can count
+    /// entries in transit (metrics M10 and M16 in `docs/RESEARCH.md`).
+    fn entry_count(message: &Self::Message) -> usize;
 }
 
 /// An action the driver carries out.

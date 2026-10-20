@@ -25,14 +25,16 @@ pub struct Config {
 
 impl Default for Config {
     /// Election timeouts of 150–300 ms, as the Raft paper recommends (§9.3), and a heartbeat
-    /// at half the minimum timeout, as in the paper's Figure 16 setup.
+    /// at half the minimum timeout, as in the paper's Figure 16 setup. The in-flight limit
+    /// lets a leader send all 1000 uncommitted entries in experiment E3 before any
+    /// acknowledgment.
     fn default() -> Self {
         Config {
             heartbeat_interval: Duration::from_millis(75),
             election_timeout_min: Duration::from_millis(150),
             election_timeout_max: Duration::from_millis(300),
             max_entries_per_message: 64,
-            max_entries_in_flight: 256,
+            max_entries_in_flight: 1024,
         }
     }
 }

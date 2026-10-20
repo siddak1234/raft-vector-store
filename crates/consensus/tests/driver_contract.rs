@@ -98,6 +98,14 @@ impl Consensus for Solo {
             commit_index: self.commit_index,
         }
     }
+
+    fn message_kind(message: &NoMessage) -> &'static str {
+        match *message {}
+    }
+
+    fn entry_count(message: &NoMessage) -> usize {
+        match *message {}
+    }
 }
 
 fn command(byte: u8) -> Command {
