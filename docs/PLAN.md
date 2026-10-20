@@ -129,8 +129,8 @@ Altinbuken, *Paxos Made Moderately Complex*.
   them in a `Commit` message.
 
 The exact rules are written as a one-page summary in the style of Raft's Figure 2
-(`docs/PAXOS_SPEC.md`). Both team members review it before coding starts. After
-experiments begin, only bug fixes are allowed.
+(`docs/PAXOS_SPEC.md`). It is reviewed and frozen before coding starts. After experiments
+begin, only bug fixes are allowed.
 
 ### 4.4 Control-Plane State Machine
 
@@ -341,8 +341,8 @@ decision rules are in `docs/RESEARCH.md` §6.
 - [x] `docs/DESIGN.md`: lease and replication protocol with correctness argument
 - [x] `docs/BUGLOG.md` started
 
-**Exit:** CI passes. Both team members have reviewed and merged the three design
-documents, and the merged commit is tagged `protocol-v1`.
+**Exit:** CI passes. The three design documents are merged, and the merged commit is
+tagged `protocol-v1`.
 
 ### Phase 1: Simulator and Raft
 
