@@ -1,0 +1,356 @@
+# Research Protocol
+
+**Status:** draft for review. Frozen with the tag `protocol-v1` before any data is
+collected. After that, changes are made only in the Amendments section, with the date
+and the reason.
+
+## 1. Purpose
+
+This protocol fixes, before any data exists, how we test the research questions in
+`docs/PLAN.md` §2: the systems, hypotheses, metrics, experimental procedures, sample sizes,
+and analysis. Where this document is more specific than the plan, this document governs.
+
+## 2. Systems Under Test
+
+| System | Specification |
+|---|---|
+| Raft | Figure 2 of the Raft paper [1], plus §8: a no-op entry on election and leader-confirmed reads |
+| Multi-Paxos | `docs/PAXOS_SPEC.md` |
+| Reference | Each algorithm running on a single server |
+
+Both algorithms implement `consensus::Consensus` and run under the same driver code, with
+the same storage, transport, state machine, and workload.
+
+## 3. Fixed Settings
+
+These apply to every experiment unless the experiment varies them.
+
+| Setting | Value |
+|---|---|
+| Election timeout | 150–300 ms, drawn uniformly per timeout |
+| Heartbeat interval | Half the minimum election timeout (75 ms by default), as in the paper's Figure 16 setup |
+| Entries per message | At most 64 |
+| Unacknowledged entries per follower | At most 1024 |
+| Persistence | The driver calls `Storage::sync` after every input, before any output |
+| Client command size | 128 bytes |
+| Leadership confirmation | The leader sends heartbeats immediately and confirms after a majority replies |
+| Disabled optimizations | PreVote, CheckQuorum, read leases, flexible quorums, Raft's faster log backtracking (§5.3) |
+| Message encoding | One serde binary format, shared by both algorithms |
+
+**Network model.** One-way message delay is uniform in `[0.5d, 1.5d]`. Messages are not
+lost unless an experiment injects faults.
+
+| Environment | `d` | Mean round trip | Purpose |
+|---|---|---|---|
+| Paper-like | 7.5 ms | 15 ms | Matches the broadcast time of about 15 ms in the paper's Figure 16 |
+| LAN-like | 0.5 ms | 1 ms | A fast local network |
+
+**Environments.**
+
+- **Simulator:** deterministic, with the delay model above. Storage writes take no
+  simulated time.
+- **Real cluster:**
+  - Localhost on one machine, one process per server.
+  - The same delay distribution is injected in the transport, and storage uses real fsync.
+  - Same release build for every run, with the machine prevented from sleeping.
+  - Raft and Multi-Paxos trials are interleaved in random order.
+
+## 4. Hypotheses
+
+| ID | Research question | Hypothesis | Decision rule |
+|---|---|---|---|
+| H1 | RQ1 | With a stable leader, Multi-Paxos's median commit latency and throughput are within ±5% of Raft's | Equivalence (§8) in every E1 configuration with 3 or 5 servers |
+| H2a | RQ2 | Multi-Paxos election traffic grows with the number of uncommitted entries; Raft's does not | Multi-Paxos: M4 bytes at k = 1000 exceed k = 0 (one-sided test). Raft: M4 bytes at k = 1000 equivalent to k = 0 |
+| H2b | RQ2 | Time without a leader and unavailability differ between the algorithms (no direction predicted) | Two-sided tests on M1 and M2 in E3 |
+| H3 | RQ3 | After a leader change, Raft re-sends fewer entries than Multi-Paxos | One-sided test on M10 in E4 |
+| H4 | RQ4 | Raft reaches fewer states under the same model-checking bounds. Raft logs never have gaps and never send entries toward a leader; Multi-Paxos logs do both | M14 compared directly. M15 and M16 are zero for Raft and above zero for Multi-Paxos. M17 tested two-sided |
+| H5 | RQ5 | Raft has fewer message types and lower code complexity | Descriptive (E7) |
+| H6 | RQ6 | Shard recovery time is equivalent between the algorithms when only a data node fails, and differs when the control-plane leader fails at the same time | Equivalence for scenario S1, two-sided test for S2 (E8) |
+
+**Validation.** Experiment E2 must reproduce the shape of the paper's Figure 16 before the
+comparison experiments are run (§9).
+
+## 5. Metrics
+
+Each metric is measured in shared code (driver, transport, storage wrapper, or client)
+unless noted. "Crash" means the instant the simulator or runner stops the process.
+
+| ID | Metric | Definition | Unit |
+|---|---|---|---|
+| M1 | Time without a leader | From the crash until a server becomes leader in a term higher than the crashed leader's | ms |
+| M2 | Unavailability | From the crash or fault until a client receives the commit reply for a command proposed after it | ms |
+| M3 | Election rounds | Number of distinct terms in which a server became candidate, from the crash until the new leader is elected | count |
+| M4 | Election traffic | Messages and bytes sent by all servers from the crash until the new leader is elected | count, bytes |
+| M5 | Stale-log rejections | Votes refused because the candidate's log is behind. Raft only; counted by Raft-specific checker code | count |
+| M6 | Unnecessary leader changes | Leader changes while the leader was running and connected to a majority | count |
+| M7 | Commit latency | From a client sending a command until it receives the commit reply. Per trial: median and p99 | ms |
+| M8 | Throughput | Commit replies per second during a trial's measurement window | commits/s |
+| M9 | Cost per commit | Messages and bytes sent by all servers during the measurement window, divided by commits | count, bytes |
+| M10 | Re-sent entries | Log entries carried (`Consensus::entry_count`) in messages from a new leader, from its election until its no-op is committed | entries |
+| M11 | Catch-up time | From a follower's restart or reconnection until its commit index reaches the leader's commit index at that instant | ms |
+| M12 | Safety violations | Violations found by the checkers (§9). Must be zero | count |
+| M13 | Evidence | Seeds and simulated hours checked | count, hours |
+| M14 | Reachable states | Unique states found by Stateright under the bounds in E6 | count |
+| M15 | Log gaps | Indexes below a server's last index that hold no entry, checked after every input. Per trial: maximum | count |
+| M16 | Entries sent toward a leader | Entries carried in messages delivered to a server whose role is candidate or leader | entries |
+| M17 | Discarded entries | Entries a server overwrites with a different payload or truncates | entries |
+| M18 | Protocol size | Message types (`Consensus::message_kind`) and persistent state fields | count |
+| M19 | Code size and complexity | SLOC, LLOC, cyclomatic and cognitive complexity per module, from `rust-code-analysis-cli` | count |
+| M20 | Bugs | Entries in `docs/BUGLOG.md`, by algorithm and subproblem | count |
+| M21 | Shard recovery time | From killing a shard's primary until a client receives the first acknowledged write to that shard | ms |
+
+**Module layout for M19.** Both `crates/raft` and `crates/paxos` are organized into the same
+modules, so complexity can be compared per subproblem:
+
+- `election.rs`
+- `replication.rs`
+- `commit.rs`
+- `lib.rs`, which holds the shared state and the trait implementation
+
+## 6. Experiments
+
+Seeds `1..=1000` are used in the simulator for every configuration. Both algorithms run the
+same seeds, so trials are paired. The real cluster uses seeds `1..=100`.
+
+### E1: Steady state (H1)
+
+- **Configurations:** algorithm × servers {1, 3, 5} × environment {LAN-like, paper-like}
+  × clients {1, 4, 16, 64}. That is 48 configurations.
+- **Procedure:**
+  1. Start the cluster and wait until a leader's no-op is committed.
+  2. Run 2 s of warm-up, which is discarded.
+  3. Measure for 10 s.
+  4. Each client is closed-loop: it sends one command, waits for the commit reply, then
+     sends the next.
+- **Trials:**
+  - Simulator: 1000 per configuration.
+  - Real cluster: 100 per configuration, for servers {3, 5} × both environments × clients
+    {1, 16}.
+- **Metrics:** M7, M8, M9.
+
+### E2: Figure 16 reproduction (validation, Raft only)
+
+- **Configurations:** 5 servers, paper-like environment, heartbeat at half the minimum
+  timeout. Election timeout ranges (ms):
+  - 150–150, 150–151, 150–155, 150–175, 150–200, 150–300
+  - 12–24, 25–50, 50–100, 100–200
+- **Procedure** (paper §9.3):
+  1. With a stable leader, the leader appends one command and delivers it to a random
+     subset of followers, so that log lengths differ.
+  2. At a uniformly random time within one heartbeat interval, the leader sends heartbeats
+     to all followers and crashes immediately afterward.
+  3. Each trial is capped at 60 s of simulated time. Capped trials are reported as
+     censored.
+- **Trials:**
+  - Simulator: 1000 per range.
+  - Real cluster: 100 for 150–300 ms.
+- **Metric:** M1.
+- **Pass criteria:**
+  - **R1:** the median for 150–150 ms is at least 10 times the median for 150–155 ms.
+  - **R2:** for 12–24, 25–50, 50–100, 100–200, and 150–300 ms, the median increases with
+    the minimum timeout.
+- **Reported against the paper's values:**
+  - 150–155 ms: median 287 ms
+  - 150–200 ms: maximum 513 ms
+  - 12–24 ms: mean 35 ms, maximum 152 ms
+
+### E3: Failover (H2a, H2b; also M10 for H3)
+
+- **Configurations:** algorithm × servers {3, 5} × uncommitted entries
+  `k ∈ {0, 10, 100, 1000}`. Paper-like environment, 150–300 ms timeouts. That is 16
+  configurations.
+- **Procedure:**
+  1. Run 4 clients in steady state.
+  2. At a uniformly random time, a separate client proposes `k` commands.
+  3. The leader's messages carrying them reach a random subset of followers, whose size is
+     uniform in `0..=N−1`.
+  4. The leader crashes before sending anything further, so no follower learns that the
+     entries were committed.
+
+  The same seed produces the same choices for both algorithms.
+- **Trials:**
+  - Simulator: 1000 per configuration.
+  - Real cluster: 100 per configuration, for `k ∈ {0, 100}`.
+- **Metrics:** M1–M5, M10, M15–M17.
+
+### E4: Log recovery and catch-up (H3)
+
+- **E4a, consecutive crashes:**
+  1. Run E3's procedure with `k ∈ {10, 100}`.
+  2. After the new leader is elected, it receives `k` more commands, delivered to a
+     minority, and crashes the same way.
+  3. M10 is measured for the third leader, which must handle entries from two earlier
+     terms.
+- **E4b, catch-up after a restart:** one follower is stopped, the leader commits
+  `n ∈ {100, 1000}` commands, and the follower restarts.
+- **E4c, catch-up after a partition:** as E4b, but the follower is partitioned instead of
+  stopped, so it keeps its log.
+- **Configurations:** servers {3, 5}, paper-like environment.
+- **Trials:** 1000 per configuration in the simulator.
+- **Metrics:** M10 (E4a), M11 (E4b and E4c).
+
+### E5: Partitions (H2b)
+
+Each scenario runs with 4 clients, 150–300 ms timeouts, and the paper-like environment.
+Partitions last 2 s and then heal.
+
+| Scenario | Fault | Servers |
+|---|---|---|
+| P1 | Leader isolated alone | 3, 5 |
+| P2 | Leader isolated with one follower (a minority) | 5 |
+| P3 | One follower isolated; the leader keeps its majority | 3, 5 |
+| P4 | Messages from the leader to every follower dropped; messages to the leader delivered | 3, 5 |
+| P5 | The link between the leader and one follower alternates down and up, each phase uniform in 100–500 ms, for 10 s | 3, 5 |
+
+- **Trials:**
+  - Simulator: 1000 per scenario and size.
+  - Real cluster: 100 each for P1 and P3 with 5 servers.
+- **Metrics:**
+  - M2 for every scenario.
+  - M6 for P3 and P5, where the leader keeps a majority, so every leader change is
+    unnecessary.
+  - M15–M17.
+
+### E6: Coherency (H4)
+
+- **Model checking:** Stateright breadth-first search over every reachable state.
+  - **Bounds:**
+    - 3 servers
+    - at most 2 client commands
+    - each server starts at most 2 elections
+    - Stateright's unordered, non-duplicating network
+    - timers fire in any order
+    - no crashes
+  - **State compared:** for each server, its role, term, vote (Raft), log entries, and
+    commit index, plus the messages in flight.
+  - **Excluded from the state:** random-number-generator state, timer durations, and
+    measurement counters. Both adapters use the same state definition.
+  - **Sensitivity check:** if each run finishes within 24 hours, repeat with at most 3
+    elections per server.
+- **Simulator counters:** M15–M17 from every E3–E5 trial.
+- **Metrics:** M14–M17.
+
+### E7: Implementation (H5)
+
+- **Tool:** `rust-code-analysis-cli` runs on `crates/raft/src` and `crates/paxos/src` at
+  the commit tagged for data collection. Metrics are reported per module (§5).
+- **M18:** message types are counted from each algorithm's message type, and persistent
+  fields from its use of `Storage`.
+- **M20:** taken from `docs/BUGLOG.md`.
+
+### E8: Vector store recovery (H6, real cluster only)
+
+- **Setup:**
+  - 3 or 5 control-plane servers, for each algorithm.
+  - 4 data nodes.
+  - One collection with 4 shards and 3 replicas each, loaded with 100,000 GloVe-25
+    vectors.
+  - 4 clients continuously upserting vectors.
+- **Scenarios:**
+  - **S1:** kill the primary of shard 0.
+  - **S2:** kill the primary of shard 0 and the control-plane leader at the same instant.
+- **Trials:** 100 per configuration and scenario.
+- **Metric:** M21.
+
+  `docs/DESIGN.md` §7 predicts M21 of at least `L + δ − h`, about 2.5 s.
+
+## 7. Sample Sizes and Stopping
+
+Sample sizes are fixed above:
+
+- 1000 paired trials per configuration in the simulator
+- 100 trials per configuration on the real cluster
+
+Data collection never stops early, and trials are never added after looking at results.
+
+## 8. Analysis
+
+- **Unit of analysis:** one trial. For E1, a trial contributes its median and p99
+  latency, its throughput, and its cost per commit.
+- **Paired comparisons** (simulator; same seed for both algorithms): Wilcoxon signed-rank
+  test.
+- **Unpaired comparisons** (real cluster): Mann–Whitney U test.
+- **Tests are two-sided** unless the hypothesis states a direction.
+- **Equivalence (H1, H2a for Raft, H6 for S1):**
+  - Compute the ratio of medians, Multi-Paxos over Raft (or k = 1000 over k = 0 for
+    H2a).
+  - Compute its 90% bootstrap percentile interval with 10,000 resamples. Paired designs
+    resample seeds as pairs.
+  - The two are equivalent if the interval lies within `[0.95, 1.05]`. This is the two
+    one-sided tests procedure at α = 0.05.
+- **Significance:** α = 0.05, with Holm–Bonferroni correction across the configurations of
+  each experiment.
+- **Effect sizes:**
+  - Paired: the median of paired differences.
+  - Unpaired: the difference of medians.
+
+  Each with a 95% bootstrap interval.
+- **Figures:** distribution plots for every failover metric, in the style of the paper's
+  Figure 16.
+- **Censored trials (E2):** counted at the cap value. A sensitivity analysis excludes them.
+- **Software:** Python 3.13 with NumPy, SciPy, pandas, and matplotlib, pinned in
+  `analysis/uv.lock`. The bootstrap uses a fixed seed (0).
+
+## 9. Validation Before Data Collection
+
+1. **Checkers:** both algorithms pass every shared checker on seeds `1..=10000` of a
+   randomized fault schedule. Each run lasts 60 s of simulated time with message loss,
+   delays, partitions, and crashes. The checkers are:
+   - State machine safety: no two servers apply different entries at an index.
+   - At most one leader per term.
+   - No acknowledged command missing from the committed log.
+   - Liveness after faults stop: a leader is elected and commands commit within 10 s of
+     simulated time.
+
+   Raft additionally passes the log matching and leader completeness checks.
+2. **A/A test:** Raft is compared with itself, analyzed as unpaired, using:
+   - **Simulator:** seeds `1..=1000` against `1001..=2000`, on E1 (3 servers, paper-like,
+     16 clients) and E3 (3 servers, `k = 10`).
+   - **Real cluster:** the same E1 configuration, 100 trials against 100 interleaved.
+
+   The test passes if no Holm-corrected test is significant and the E1 ratios fall within
+   `[0.95, 1.05]`. A failure means the harness is biased or noisy, and it must be fixed
+   before going further.
+3. **E2 pass criteria** (§6) are met.
+
+## 10. Exclusions and Failures
+
+- **Harness failures:** a trial may be excluded only if the harness failed (a process
+  failed to start, the runner crashed, or the machine slept). The reason is recorded in
+  the analysis code's exclusion list, and the trial is rerun with the same seed.
+- **Safety violations:** a violation stops data collection.
+  1. The bug is recorded in `docs/BUGLOG.md` and fixed.
+  2. Every experiment is rerun for both algorithms.
+
+## 11. Threats to Validity
+
+- **Construct:**
+  - Results describe our Multi-Paxos variant, not Paxos in general.
+  - Code complexity (M18, M19) stands in for understandability; we do not repeat the
+    paper's user study (§9.1).
+- **Internal:**
+  - The two implementations may differ in quality. Mitigations:
+    - shared code, settings, and checkers
+    - the same module layout
+    - the A/A test
+  - The same two people wrote both implementations.
+- **External:**
+  - The simulator and localhost are not real networks, and clusters have at most five
+    servers.
+  - The real cluster runs on a single machine.
+- **Statistical:**
+  - Multiple comparisons are corrected with Holm–Bonferroni.
+  - Paired seeds remove variation caused by different fault schedules.
+
+## Amendments
+
+None.
+
+## References
+
+1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm
+   (Extended Version)*. 2014. https://raft.github.io/raft.pdf
+2. H. Howard and R. Mortier. *Paxos vs Raft: Have We Reached Consensus on Distributed
+   Consensus?* PaPoC 2020. https://arxiv.org/abs/2004.05074
+3. Stateright. https://github.com/stateright/stateright
+4. rust-code-analysis. https://mozilla.github.io/rust-code-analysis/
