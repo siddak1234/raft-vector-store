@@ -600,6 +600,31 @@ per second, close to the simulator's A/A results (31.7 ms, 502 per second). It w
 the real cluster is rerun with it too, so every real-cluster result comes from one
 harness. The failed run and the first E2 run stay in the repository and are reported.
 
+### A7. 2026-10-25: Data collection restarted at `data-v2`
+
+**Outcome.** Data collection began at `data-v1`. E4 completed
+(`experiments/results/E4/20261025T055422Z-d6e3425`). E6 had completed its first rung for
+both algorithms and was searching the second when we stopped it: an exploratory check of
+the E4c result, not part of this protocol, had found a bug in both algorithms. After a
+reply, each leader sent at most one message of up to 64 entries, so a backlog moved one
+batch per round trip instead of up to the in-flight limit (amendment A1.4;
+`docs/PAXOS_SPEC.md` amendment A2.5; `docs/BUGLOG.md`).
+
+**Fix.** Both leaders send messages until `max_entries_in_flight` entries are
+unacknowledged or none are left. The fix is tagged `data-v2`.
+
+**Decision.**
+
+- By §10 and amendment A3.2, every experiment, E1–E8, is rerun for both algorithms at
+  `data-v2`, including E2 on the real cluster and the exploratory E2 on the LAN-like
+  network. Because the code under test changed, the validation campaign (§9.1) and both
+  A/A tests (§9.2) are rerun first, for both algorithms.
+- Runs are made from commits whose code equals `data-v2`. Commits after the tag change only
+  documents and results, and each run's manifest records its commit.
+- The `data-v1` E4 results stay in the repository and are reported as superseded. The
+  partial `data-v1` E6 output was not committed and is not reported: we stopped the run, the
+  harness did not fail.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

@@ -54,6 +54,8 @@ and the other `rvs` commands drive it.
 - [Contributing](CONTRIBUTING.md): repository rules and workflow
 - [Results](docs/RESULTS.md): results so far, with the commands that produce them
 - [Bug log](docs/BUGLOG.md): bugs found during development
+- [Report](docs/REPORT.md) and [slides](docs/SLIDES.md): the final write-up; the results
+  sections are filled in from the Phase 5 runs
 
 ## License
 

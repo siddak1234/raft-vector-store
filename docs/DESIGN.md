@@ -232,7 +232,8 @@ fail between re-replications.
 2. **Changes to `inSync` keep this true.** Members leave `inSync` only through committed
    shrinks. A replica joins only after it holds the primary's whole log.
 3. **Promotion keeps the writes.** The new primary is chosen from `inSync`, so it holds
-   every acknowledged write. Backups delete only entries above its last offset.
+   every acknowledged write. A backup deletes only entries that differ from the new
+   primary's log (§6.4), so it keeps every acknowledged write it holds.
 4. **There is always a survivor.** `minInSync` copies exist for every acknowledged write.
    With at most `RF − minInSync` failures, one of them survives.
 

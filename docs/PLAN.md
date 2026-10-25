@@ -453,11 +453,13 @@ results in `docs/RESULTS.md`).
 
 ### Phase 5: Experiments
 
-- [ ] The commit used for data collection is tagged `data-v1`. After that, only bug fixes
+- [x] The commit used for data collection is tagged `data-v1`. After that, only bug fixes
       are allowed (Section 4.3); a fix is tagged `data-v2`, and so on, and every
-      experiment is rerun for both algorithms (Section 5, rule 4)
-- [ ] E1–E8 run as specified in `docs/RESEARCH.md` §6 and amendments A3–A5. E7 needs
-      `rust-code-analysis-cli` (`cargo install rust-code-analysis-cli`)
+      experiment is rerun for both algorithms (Section 5, rule 4). A bug found during
+      data collection is fixed at `data-v2` (`docs/RESEARCH.md` amendment A7)
+- [ ] E1–E8 run as specified in `docs/RESEARCH.md` §6 and amendments A3–A7, after the
+      validation campaign and both A/A tests are rerun at `data-v2` (amendment A7). E7
+      needs `rust-code-analysis-cli` (`cargo install rust-code-analysis-cli`)
 - [ ] Raw results, configs, and seeds stored in `experiments/`, each experiment's results
       committed before the next run starts
 
