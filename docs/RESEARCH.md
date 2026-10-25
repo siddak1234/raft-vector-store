@@ -506,6 +506,67 @@ any real-cluster data was collected, and they apply to both algorithms.
 10. **Environment.** The machine is kept awake with `caffeinate -i`, and nothing else
     heavy runs during real-cluster experiments.
 
+### A5. 2026-10-25: E4, E5, E6, and E8 details fixed before their data
+
+These details were not specified above, or, for E6, could not be carried out as written.
+They were fixed before any data of these experiments was collected, and they apply to
+both algorithms.
+
+1. **E4a.** E3's procedure crashes the first leader. As soon as the second leader is
+   elected, the first leader restarts with its log; otherwise a 3-server cluster could not
+   elect a third leader. The second leader then appends `k` commands whose messages reach
+   a random subset of followers that, with the leader, is a minority (size uniform in
+   `0..=⌊N/2⌋ − 1`), and crashes in the same instant. M10 is measured for the third leader,
+   as in E3. E4a runs with 4 clients.
+2. **E4b and E4c.** No clients run. Once a leader's no-op is committed, a random follower
+   is stopped (E4b) or partitioned from every other server (E4c). The leader appends `n`
+   commands and runs until they commit. The follower then restarts or the partition heals;
+   M11 runs from that instant until the follower's commit index reaches the leader's
+   commit index at that instant. Trials are capped at 60 s and recorded as censored.
+3. **E5.** As in E3, the fault starts at a uniformly random time 1–2 s after a leader's
+   no-op commits. P2's minority is the leader and one random follower. P3 isolates one
+   random follower. P4 blocks every link from the leader to a follower. P5 starts with the
+   link down and alternates. M6 counts the terms with a new leader from the fault until
+   3 s after it heals. M2 is capped at 60 s after the fault. On the real cluster, P1 and P3
+   isolate the server by dropping its messages in both directions in every server's
+   transport.
+4. **E6, the bounds.** The bounds of §6 cannot be searched exhaustively on the experiment
+   machine. While the search was sized during development, the smallest variant (no client
+   commands, one election per server, no heartbeat timer firing) already had about 37
+   million reachable states per algorithm, and a variant that also let each server's
+   heartbeat timer fire once ran for more than two hours with 4.6 GB of memory and did not
+   finish. These development counts are not reported as results. Three changes are made:
+   1. **A heartbeat bound.** Each server's heartbeat timer fires at most `H` times.
+      Without a bound the state space is infinite, because every heartbeat round carries
+      a new round number (amendment A1.3).
+   2. **Depth-first search.** Stateright searches depth-first. Run to completion, it
+      visits the same reachable states as breadth-first search, which keeps every
+      frontier state in memory and does not fit.
+   3. **A ladder of bounds.** The search runs, for both algorithms, at these bounds
+      (commands, elections per server, heartbeats per server), in order: (0, 1, 0),
+      (0, 1, 1), (1, 1, 0), (1, 1, 1), (2, 1, 1), (1, 2, 1), (2, 2, 1), (2, 2, 2). Each search
+      has a budget of 6 hours and 1.2 billion generated states. A rung is skipped if a
+      smaller rung, one with every bound at most as large and at least one smaller,
+      did not complete for both algorithms. Every rung that completes for both
+      algorithms is reported; none is dropped. This replaces the sensitivity check of §6.
+   M14 counts the distinct states of the compared fields of §6. The search state also
+   holds each algorithm's internal state, its pending timers, and the bound counters, so
+   successors are computed exactly. Random number generators compare equal whatever their
+   position, so states that differ only in the numbers a server will draw next are one
+   state; both algorithms draw random numbers only for timer durations, which the model
+   does not model. The model uses the default `Config` (64 entries per
+   message), 3 servers, no crashes, and an unordered network that never duplicates a
+   message; a message never delivered models a lost one.
+5. **E6 in Phase 2.** The run of E6 in Phase 2 is a check of the adapter. The reported E6
+   is the run at the data-collection tag.
+6. **E8.** Both control-plane sizes, 3 and 5, run for each algorithm. Control-plane traffic
+   uses the paper-like delay; data-plane traffic has no injected delay. The 100,000
+   vectors are the first 100,000 GloVe-25 training vectors, loaded by 64 concurrent
+   writers before the 4 clients start. The fault comes 2 s after the clients start. M21
+   ends at the first acknowledgment to shard 0 at an epoch newer than the killed primary's,
+   so an acknowledgment already in flight from the killed primary does not count. Trials
+   are capped at 60 s.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

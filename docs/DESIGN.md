@@ -64,11 +64,15 @@ Committed through consensus (`docs/PLAN.md` §4.4):
 2. When a reply grants the lease for the heartbeat sent at `s`, set
    `leaseExpiry = max(leaseExpiry, s + L)`.
 3. Serve as primary only while the local time is before `leaseExpiry`.
+4. If the shard map shows incarnation `k` marked `Dead`, drop every shard and start over
+   with a new incarnation, as after a restart. The control plane never grants `(n, k)` a
+   lease again (rule 4 below).
 
 ### Control-plane leader
 
 1. **Collect heartbeats.** Add each `Heartbeat(n, k)` to the pending batch, then call
-   `confirm_leadership` for the batch.
+   `confirm_leadership` for the batch. If `n` is unknown or `k` is newer than the
+   incarnation on record, first propose `RegisterNode(n, address, k)`.
 2. **Grant renewals.** On `LeadershipConfirmed(read_index)`:
    1. Wait until the state machine has applied every entry up to `read_index`.
    2. Grant the lease to each heartbeat in the batch whose node is registered with
@@ -134,7 +138,7 @@ The rules below keep `ackSet ⊇ inSync` (the committed set) at all times.
    | Message epoch | Action |
    |---|---|
    | Lower than the backup's epoch | Reject |
-   | Higher | Adopt it (§6.4) |
+   | Higher | Refuse, reporting the backup's own epoch, so the primary aligns it with `NewEpoch` first (§6.4) |
    | Equal | See the offset rules below |
 
    Offset rules:
@@ -251,6 +255,7 @@ old lease has expired, so M21 in experiment E8 is expected to be at least `L + �
 | `NewEpoch`, `NewEpochAck` (with the new primary's epoch boundaries) | New primary ↔ backup |
 | `CopyShard` (log chunks) | Primary → replacement replica |
 | `Search`, `SearchReply` | Client ↔ primary |
+| `Inspect`, `SetFaults` (tests only) | Test runner → data node: what a replica holds of a shard, for the no-lost-write check; cutting the node off from control-plane servers |
 
 ## 9. Out of Scope
 

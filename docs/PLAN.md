@@ -139,7 +139,9 @@ begin, only bug fixes are allowed.
   - data nodes: address, incarnation, status
   - shards: replicas, primary, in-sync set, epoch
 - **Commands:** `CreateCollection`, `DropCollection`, `RegisterNode`, `MarkNodeDead`,
-  `AddReplica`, `RemoveReplica`, `PromotePrimary`, `ShrinkInSync`, `ExpandInSync`.
+  `AddReplica`, `RemoveReplica`, `PromotePrimary`, `ShrinkInSync`, `ExpandInSync`, and
+  `Bench`, which changes nothing and is what the experiments' clients send, padded to the
+  protocol's 128-byte command size.
 - **Epoch checks:** every ownership change carries the epoch it expects. It fails if the
   epoch has changed.
 - **Deterministic apply:**
@@ -155,6 +157,9 @@ begin, only bug fixes are allowed.
 - **Storage:** data nodes keep vectors in memory and answer k-nearest-neighbor queries by
   brute-force search. A restarted node gets a new incarnation number and is treated as a
   new replica.
+- **Registration:** a data node's first heartbeat with a new incarnation makes the leader
+  propose `RegisterNode` before it grants a lease. A node the control plane marked dead
+  while it was still running starts over as a new incarnation.
 - **Liveness:** data nodes send heartbeats to the control-plane leader. Heartbeats are not
   written to the log. Leases follow three rules:
   1. A data node starts its lease clock when it sends a heartbeat.
@@ -175,7 +180,8 @@ begin, only bug fixes are allowed.
     addition.
   - The shard rejects writes if fewer than 2 of 3 replicas are in sync.
   - When a new primary takes over, backups discard writes it does not have. Those writes
-    were never acknowledged.
+    were never acknowledged. Backups find them by comparing entry epochs with the new
+    primary's log (`docs/DESIGN.md` §6.4).
   - When a data node dies, a replacement replica copies the shard from the primary and
     joins the in-sync set once it has caught up.
 - **Routing:**
@@ -202,9 +208,12 @@ begin, only bug fixes are allowed.
   - No acknowledged command is missing from the committed log.
   - Once faults stop, a leader is elected and commands commit within a bounded time.
 - **Raft-only checkers:** log matching and leader completeness (Figure 3).
-- **Model checking:** a Stateright adapter wraps both algorithms. It counts every state
-  each algorithm can reach under the same limits.
-- **Real cluster:** `kill -9` crashes, and fault injection in the transport layer.
+- **Model checking:** a Stateright adapter wraps both algorithms. It searches depth-first
+  through every state each algorithm can reach within the same bounds, the ladder of
+  `docs/RESEARCH.md` amendment A5, and counts the distinct states of the compared fields.
+- **Real cluster:** `kill -9` crashes, a crash procedure for E2 and E3, and fault and delay
+  injection in the transport layer, with the delay applied where a message is received
+  (`docs/RESEARCH.md` amendment A4).
 
 ## 5. Experimental Method
 
@@ -256,7 +265,8 @@ These rules make the comparison apples to apples:
      before any data is collected.
 9. **Two environments:**
    - **Simulator:** exact message counts and a controlled delay model.
-   - **Real cluster:** localhost with delay injected in the transport, plus real fsync.
+   - **Real cluster:** localhost with delay injected in the transport, plus real fsync
+     (details in `docs/RESEARCH.md` amendment A4).
 
    Delay is set so the broadcast time is about 1 ms (LAN) or about 15 ms (the setup
    behind the paper's Figure 16).
@@ -322,7 +332,7 @@ These rules make the comparison apples to apples:
 | E3 Failover | RQ2 | E2 setup on both algorithms, 3 and 5 servers, 0/10/100/1000 uncommitted entries at crash time | M1–M5 |
 | E4 Log recovery | RQ3 | Leader crashes while entries from earlier terms are uncommitted | M10, M11 |
 | E5 Partitions | RQ2 | Minority, majority, one-way, and flapping partitions | M2, M6 |
-| E6 Coherency | RQ4 | Model checking at the same limits; counters collected during E3–E5 | M14–M17 |
+| E6 Coherency | RQ4 | Model checking at the same bounds for both algorithms, the ladder of amendment A5; counters collected during E3–E5 | M14–M17 |
 | E7 Implementation | RQ5 | Static analysis of the frozen code; bug log | M18–M20 |
 | E8 Vector store recovery | RQ6 | Data-node primary crash, with and without a simultaneous control-plane leader crash | M21 |
 
@@ -364,24 +374,30 @@ summarized in `docs/RESULTS.md`.
 
 ### Phase 2: Multi-Paxos and State-Space Analysis
 
-- [ ] Multi-Paxos implemented from `docs/PAXOS_SPEC.md`
-- [ ] Passes the shared checkers on the same seed set as Raft
-- [ ] Stateright adapter for both algorithms; state counts at the agreed limits
+- [x] Multi-Paxos implemented from `docs/PAXOS_SPEC.md`; details the specification left
+      open are its amendment A2
+- [x] Passes the shared checkers on the same seed set as Raft: seeds 1–10,000, zero
+      violations
+- [x] Stateright adapter for both algorithms (`crates/modelcheck`)
+- [ ] State counts for both algorithms at the bounds of `docs/RESEARCH.md` amendment A5.
+      The bounds of §6 cannot be searched exhaustively on the experiment machine
 
 **Exit:** zero violations across the shared seed set, and state counts recorded for both
 algorithms.
 
 ### Phase 3: Control Plane on a Real Cluster
 
-- [ ] Metadata state machine and client sessions, unit-tested without consensus
-- [ ] File-backed storage with fsync; gRPC transport (tonic); consensus core on its own
+- [x] Metadata state machine and client sessions, unit-tested without consensus
+- [x] File-backed storage with fsync; gRPC transport (tonic); consensus core on its own
       thread
-- [ ] `--consensus` flag, static cluster config, leader redirect, shard map served by any
+- [x] `--consensus` flag, static cluster config, leader redirect, shard map served by any
       server
-- [ ] Fault-injection and delay-injection admin commands
+- [x] Fault-injection and delay-injection admin commands (`rvs faults`), and the crash
+      procedure that E2 and E3 use on a real leader (`docs/RESEARCH.md` amendment A4.8)
 - [ ] `cargo xtask cluster` for 1, 3, and 5 servers; structured logs; metrics export
-- [ ] Real-cluster A/A test and real-cluster E2 at 150–300 ms, deferred to this phase by
-      `docs/RESEARCH.md` amendments A1.6 and A1.9
+- [x] Real-cluster E2 at 150–300 ms, deferred to this phase by `docs/RESEARCH.md`
+      amendment A1.6
+- [ ] Real-cluster A/A test, deferred to this phase by amendment A1.9
 
 **Exit:** for both algorithms, writes resume after a `kill -9` of the leader, and a
 restarted server catches up. The real-cluster A/A test passes, and the real-cluster E2
@@ -394,18 +410,20 @@ results are recorded.
   - registration, heartbeats, leases
   - routing client, CLI
   - ANN-Benchmarks loader
-- [ ] **Milestone B, replication:**
+- [x] **Milestone B, replication:**
   - in-sync set rules, minimum in-sync size, promotion
   - discarding unacknowledged writes on promotion
   - re-replication
-- [ ] **Checks**, run against logs that every data node and client writes:
+- [x] **Checks**, run against logs that every data node and client writes:
   - at most one data node serves each shard as primary at any moment (`docs/DESIGN.md`
     C1), comparing serving intervals on the machine's shared clock
   - no acknowledged write is lost (C2)
-- [ ] **Partition tests:**
+- [x] **Partition tests:**
   - the control-plane leader is cut off with a minority while data nodes still send it
     heartbeats
   - a shard's primary is cut off from the control-plane leader
+- [x] `cargo xtask dataset` downloads and checks the datasets; `cargo xtask dataplane` runs
+      the checks below for both algorithms
 
 **Exit:**
 
@@ -420,8 +438,10 @@ results are recorded.
 - [ ] The commit used for data collection is tagged `data-v1`. After that, only bug fixes
       are allowed (Section 4.3); a fix is tagged `data-v2`, and so on, and every
       experiment is rerun for both algorithms (Section 5, rule 4)
-- [ ] E1–E8 run as specified in `docs/RESEARCH.md`
-- [ ] Raw results, configs, and seeds stored in `experiments/`
+- [ ] E1–E8 run as specified in `docs/RESEARCH.md` §6 and amendments A3–A5. E7 needs
+      `rust-code-analysis-cli` (`cargo install rust-code-analysis-cli`)
+- [ ] Raw results, configs, and seeds stored in `experiments/`, each experiment's results
+      committed before the next run starts
 
 **Exit:** every configuration has reached its planned sample size, with zero safety
 violations in any run.
@@ -430,9 +450,10 @@ violations in any run.
 
 - [ ] Analysis code (Python: pandas, SciPy, matplotlib) that regenerates every figure and
       table from raw results
-- [ ] Final report: background, design, method, results by research question, threats to
-      validity, conclusion
-- [ ] Demo of live failover under both algorithms, and presentation slides
+- [ ] Final report (`docs/REPORT.md`): background, design, method, results by research
+      question, threats to validity, conclusion
+- [ ] Demo of live failover under both algorithms (`cargo xtask demo`), and presentation
+      slides (`docs/SLIDES.md`)
 
 **Exit:** report and slides are complete, and `cargo xtask figures` regenerates all
 figures from the repository.
@@ -499,6 +520,9 @@ consensus.
 | The two implementations differ in quality | Shared code, shared checkers, matched settings, A/A validation |
 | The simulator and localhost differ from a real network | Delay injection, results reported for both environments, limitation stated in the report |
 | The data plane is the largest build item | It does not affect RQ1–RQ5, so it is built after both consensus modules pass verification |
+| Exhaustive model checking does not fit in memory at the bounds of `docs/RESEARCH.md` §6 | A fixed ladder of smaller bounds, reported rung by rung (amendment A5) |
+| Real-cluster throughput is bound by disk flushes on the machine's one SSD | The same for both algorithms; stated as a threat to validity |
+| Heavy jobs on the same machine add noise to real-cluster timings | Experiments run one at a time on an otherwise idle machine (amendment A4.10) |
 
 ## 13. References
 

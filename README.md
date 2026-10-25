@@ -27,16 +27,30 @@ nodes, where each shard is replicated from a primary to its backups.
 `cargo xtask help` lists all project commands. To reproduce the committed results:
 
 ```sh
-cargo xtask validate          # seeds 1-10000 of the random-fault campaign
-cargo xtask experiment AA     # A/A test of the harness
-cargo xtask experiment E2     # Raft paper Figure 16 reproduction
-cargo xtask figures           # summaries and figures from the latest results
+cargo xtask validate                    # Raft: seeds 1-10000 of the random-fault campaign
+cargo xtask validate --algorithm paxos  # the same campaign for Multi-Paxos
+cargo xtask experiment AA               # A/A test of the harness in the simulator
+cargo xtask experiment E2               # Raft paper Figure 16 reproduction
+cargo xtask experiment AA-real          # A/A test on a real cluster of processes
+cargo xtask experiment E2-real          # Figure 16 at 150-300 ms on a real cluster
+cargo xtask dataset glove-25            # download the GloVe-25 dataset (also: sift)
+cargo xtask dataplane                   # the Phase 4 data-plane checks, both algorithms
+cargo xtask figures                     # summaries and figures from the latest results
 ```
+
+To try the system by hand, `cargo xtask cluster 3 --consensus raft --data-nodes 4` starts
+a local cluster and prints its cluster file; `target/release/rvs --cluster FILE status`
+and the other `rvs` commands drive it.
 
 ## Documents
 
 - [Project plan](docs/PLAN.md): research questions, design, metrics, experiments, and
   phases
+- [Research protocol](docs/RESEARCH.md): hypotheses, procedures, sample sizes, tests, and
+  dated amendments, frozen before data collection
+- [Multi-Paxos specification](docs/PAXOS_SPEC.md): the variant compared with Raft
+- [Data plane design](docs/DESIGN.md): leases, replication, and their correctness
+  arguments
 - [Contributing](CONTRIBUTING.md): repository rules and workflow
 - [Results](docs/RESULTS.md): results so far, with the commands that produce them
 - [Bug log](docs/BUGLOG.md): bugs found during development

@@ -1,12 +1,15 @@
 # Bug Log
 
-Every bug found in a consensus implementation or the test harness is recorded here, in the
-same commit as the fix. The log is the data for metric M20 (`docs/PLAN.md` §6).
+Every bug found in a consensus implementation, the test harness, or other shared code
+(the server, data plane, and clients) is recorded here, in the same commit as the fix. The
+log is the data for metric M20 (`docs/PLAN.md` §6), which compares the `raft` and `paxos`
+entries; `shared` entries do not count toward either algorithm.
 
 ## Columns
 
 - **Date:** date the bug was found (YYYY-MM-DD).
-- **Algorithm:** `raft`, `paxos`, or `shared` (simulator, checkers, storage, transport).
+- **Algorithm:** `raft`, `paxos`, or `shared` (simulator, checkers, storage, transport,
+  server, data plane, clients).
 - **Subproblem:** `election`, `replication`, `safety`, or `other`.
 - **Found by:** the checker or test that caught it, such as `sim: state machine safety`,
   `modelcheck`, `unit test`, `real cluster`, or `review`.
@@ -21,3 +24,7 @@ same commit as the fix. The log is the data for metric M20 (`docs/PLAN.md` §6).
 | 2026-10-20 | raft | replication | sim test: random faults (the run never finished) | 2 | The leader sent entries ahead of acknowledgments. After one lost message, the follower rejected every later message, and the leader resent entries for each stale rejection; duplicated messages multiplied the resends into a storm of millions of messages. | Followers are tracked as probing or replicating, and each reply names the message it answers so stale rejections are ignored (commit "Add Raft") |
 | 2026-10-20 | shared | other | sim: durability | 2 | Tests checked durability while clients were still sending, before followers had learned the latest commit index, so the check reported violations that were not real. | Added `Simulation::stop_clients`; durability is checked after clients stop and servers catch up (commit "Add Raft") |
 | 2026-10-20 | shared | other | review of analysis output | 3 (E2, 12–24 ms) | E2 and E3 trials in which no server was leader at the chosen crash instant were marked ready with no measurement. Medians in pandas skipped them, but a quick script using Python's `statistics.median` returned a wrong value because the missing values broke its sort. | Such trials are marked not ready (commit "Mark trials without a leader at the crash instant as not ready") |
+| 2026-10-24 | shared | other | review of the data-plane design during implementation | | When a new primary aligned a backup, the backup deleted only the entries above the new primary's last offset. A backup that missed an earlier change of epoch could keep, below that offset, entries from an epoch the new primary never followed, so the two logs would diverge. | `NewEpoch` carries the new primary's epoch boundaries, and the backup keeps only the prefix whose entries match them (`docs/DESIGN.md` §6.4; commit "Add the data plane, cluster tooling, and the Phase 4 checks"). Logged late: this entry belonged in that commit |
+| 2026-10-24 | shared | other | Phase 4 check: ground truth (scratch run) | | The client returned "no collection" at once when its cached shard map came from a server that had not yet applied `CreateCollection`, instead of refreshing the map from the leader. | A missing collection is treated as a stale map: the client reads the map from the leader and retries until its deadline (same commit). Logged late |
+| 2026-10-24 | shared | other | Phase 4 check: ground truth on SIFT (scratch run) | | A data node's heartbeats and its `ShrinkInSync`/`ExpandInSync` proposals shared one lock, and a proposal could hold it for up to 5 s, so under heavy load leases expired and primaries refused writes. | Heartbeats use a link of their own (same commit). Logged late |
+| 2026-10-24 | shared | other | review of the Phase 4 check output | | The data-plane check counted the first acknowledged write to shard 0 after the fault as recovery, but an acknowledgment still in flight from the killed primary arrives after the fault too, so recovery could read as 0 s. | Recovery is measured to the first acknowledgment at an epoch newer than the killed primary's (same commit). Logged late |
