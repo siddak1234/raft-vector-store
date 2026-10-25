@@ -20,6 +20,12 @@ Commands:
                      for one algorithm (--algorithm raft or paxos; default raft)
   experiment ID      Run experiments/configs/ID.toml and write results
   figures            Regenerate every analysis table and figure from the latest results
+  dataset NAME       Download an ANN-Benchmarks dataset (glove-25 or sift) and check it
+  dataplane [OPTS]   Run the Phase 4 data-plane checks on real processes
+                     (--algorithm raft|paxos, --scratch DIR)
+  cluster [N] [OPTS] Start a local cluster of N = 1, 3, or 5 control-plane servers and
+                     M data nodes (--consensus raft|paxos, --delay-us D,
+                     --data-nodes M) until Enter is pressed
   help               Show this message
 
 Options for validate and experiment (passed to the experiment runner):
@@ -41,6 +47,9 @@ fn main() -> ExitCode {
             experiments::experiment(&root, id, rest)
         }
         [command] if command == "figures" => experiments::figures(&root),
+        [command, rest @ ..] if command == "cluster" => experiments::cluster(&root, rest),
+        [command, name] if command == "dataset" => experiments::dataset(name),
+        [command, rest @ ..] if command == "dataplane" => experiments::dataplane(&root, rest),
         [] => {
             print!("{HELP}");
             Ok(())

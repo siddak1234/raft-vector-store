@@ -5,6 +5,7 @@
 
 pub mod failover;
 pub mod figure16;
+pub mod modelcheck;
 pub mod steady;
 pub mod validation;
 
@@ -50,7 +51,7 @@ pub fn run_experiment(
             .flat_map(|run| {
                 let seeds = run.seeds();
                 let limit = seed_limit.unwrap_or(u64::MAX) as usize;
-                seeds.take(limit).map(move |seed| (run, seed))
+                seeds.into_iter().take(limit).map(move |seed| (run, seed))
             })
             .collect()
     };
@@ -74,6 +75,28 @@ pub fn run_experiment(
             Kind::Paxos => figure16::trial::<Paxos>(run, *seed),
         });
         results::write_csv(output, "figure16.csv", &rows)?;
+        trials += rows.len();
+    }
+    // Model checking uses every core for one search at a time.
+    let searches: Vec<&RunConfig> = config
+        .run
+        .iter()
+        .filter(|run| run.scenario == Scenario::Modelcheck)
+        .collect();
+    if !searches.is_empty() {
+        let mut rows = Vec::new();
+        for run in searches {
+            eprintln!(
+                "modelcheck {}: {} (commands {:?}, elections {:?}, heartbeats {:?})",
+                run.label, run.algorithm, run.max_commands, run.max_elections, run.max_heartbeats
+            );
+            rows.push(match kind(run) {
+                Kind::Raft => modelcheck::search::<Raft>(run),
+                Kind::Paxos => modelcheck::search::<Paxos>(run),
+            });
+            // Rows are written after each search, so a long run keeps what it finished.
+            results::write_csv(output, "modelcheck.csv", &rows)?;
+        }
         trials += rows.len();
     }
     let failover = jobs(Scenario::Failover);
@@ -106,7 +129,7 @@ fn sim_config<A: Algorithm>(run: &RunConfig, clients: usize, count_bytes: bool) 
     SimConfig {
         servers: run.servers,
         consensus,
-        one_way_delay: run.network.one_way_delay(),
+        one_way_delay: run.network().one_way_delay(),
         clients,
         command_bytes: COMMAND_BYTES,
         count_bytes,
@@ -196,7 +219,7 @@ fn run_columns(run: &RunConfig) -> String {
         run.arm,
         run.algorithm,
         run.servers,
-        run.network.name(),
+        run.network.map_or("", |n| n.name()),
         run.clients,
         run.uncommitted
     )

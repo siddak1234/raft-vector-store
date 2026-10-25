@@ -20,6 +20,10 @@ Usage:
       for one algorithm: raft (the default) or paxos.
   bench experiment CONFIG [--seeds N] [--scratch DIR]
       Runs every trial in an experiment config (experiments/configs/*.toml).
+  bench dataplane [--algorithm NAME] [--scratch DIR]
+      Runs the Phase 4 exit checks on real processes (docs/PLAN.md §8).
+  bench cluster [1|3|5] [--consensus raft|paxos] [--delay-us D] [--data-nodes M]
+      Starts a local cluster and stops it when Enter is pressed.
 
 Options:
   --algorithm NAME  Validation: the algorithm to check, raft or paxos (default raft).
@@ -83,6 +87,12 @@ fn run(args: &[String]) -> Result<(), String> {
         print!("{HELP}");
         return Ok(());
     };
+    if command == "cluster" {
+        return bench::cluster::run(rest);
+    }
+    if command == "dataplane" {
+        return bench::dataplane::run(rest);
+    }
     let options = parse(rest)?;
     match command.as_str() {
         "validate" => validate(&options),

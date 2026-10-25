@@ -401,6 +401,11 @@ pub struct NewEpoch {
     pub epoch: Epoch,
     /// The new primary's last offset.
     pub end_offset: u64,
+    /// For each epoch in the new primary's log, in order, the last offset written in it.
+    /// A backup keeps only the prefix of its log whose entries match these epochs.
+    pub epochs: Vec<(Epoch, u64)>,
+    /// The collection's metric, so a replacement replica can create the shard.
+    pub metric: Metric,
 }
 
 /// A backup's answer to [`NewEpoch`].
@@ -453,6 +458,46 @@ pub enum CopyShardAck {
         /// The replica's epoch.
         epoch: Epoch,
     },
+}
+
+/// What a data node holds of one shard, for the no-lost-write check.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShardDump {
+    /// The shard.
+    pub shard: ShardKey,
+    /// The replica's epoch.
+    pub epoch: Epoch,
+    /// The last offset held.
+    pub last_offset: u64,
+    /// Whether the node currently serves the shard as primary.
+    pub primary: bool,
+    /// Every vector ID held, in order.
+    pub ids: Vec<u64>,
+}
+
+/// A request a data node served as a shard's primary, for the single-primary check
+/// (`docs/DESIGN.md` §7, C1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServeEvent {
+    /// When it was served, in microseconds since the Unix epoch.
+    pub time: u64,
+    /// The shard.
+    pub shard: ShardKey,
+    /// The epoch it was served at.
+    pub epoch: Epoch,
+    /// A write, or a search.
+    pub write: bool,
+}
+
+/// A data node's measurement log.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DataNodeEvents {
+    /// The data node.
+    pub node: u64,
+    /// Its current incarnation.
+    pub incarnation: u64,
+    /// Requests served as primary.
+    pub serves: Vec<ServeEvent>,
 }
 
 // ----- Delay injection -------------------------------------------------------------------

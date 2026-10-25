@@ -174,11 +174,20 @@ The rules below keep `ackSet ⊇ inSync` (the committed set) at all times.
    - If no member of `inSync` is alive, the shard stays unavailable. A replica outside
      `inSync` is never promoted.
 2. **Align the backups.** `p′` learns of the promotion from its next heartbeat reply. It
-   then sends `NewEpoch(shard, e + 1, endOffset)` to the other replicas, where `endOffset`
-   is its last offset. Each replica:
-   1. deletes its entries above `endOffset`
+   then sends `NewEpoch(shard, e + 1, endOffset, epochs)` to the other replicas, where
+   `endOffset` is its last offset and `epochs` lists, for each epoch in its log, the last
+   offset written in that epoch. Each replica:
+   1. keeps the longest prefix of its log whose entries are at or below `endOffset` and
+      carry the epoch that `p′`'s log has at the same offset, and deletes the rest
    2. adopts epoch `e + 1`
-   3. acknowledges
+   3. acknowledges with its last offset, from which `p′` sends it the entries it lacks
+
+   Deleting only the entries above `endOffset` is not enough. A replica that missed an
+   earlier change of epoch can hold, below `endOffset`, entries from an older epoch that
+   `p′` never had. Each epoch has one primary, which writes each offset once, so an epoch
+   and an offset identify an entry, and comparing epochs finds where the logs part, as
+   Kafka's leader-epoch truncation does. This rule replaced the original one during
+   implementation (2026-10-24), before any data-plane data was collected.
 3. **Start serving.** `p′` accepts writes once its lease is valid and `ackSet` has at
    least `minInSync` members.
 
@@ -224,7 +233,7 @@ fail between re-replications.
    With at most `RF − minInSync` failures, one of them survives.
 
 **C3. Replicas converge.** After a promotion, every replica that adopts the new epoch
-holds the same log up to `endOffset`, and later writes are appended in offset order.
+holds a prefix of the new primary's log, and receives the rest from it in offset order.
 
 **C4. Recovery time.** Suppose a majority of the control plane and at least `minInSync`
 replicas of a shard are running and connected. After the shard's primary fails, the
@@ -239,7 +248,7 @@ old lease has expired, so M21 in experiment E8 is expected to be at least `L + �
 | `Heartbeat`, `HeartbeatReply` (lease granted or refused, plus shard-map changes since the node's last known version) | Data node ↔ control-plane leader |
 | `Write`, `WriteReply` | Client ↔ primary |
 | `Replicate`, `Ack` | Primary ↔ backup |
-| `NewEpoch`, `NewEpochAck` | New primary ↔ backup |
+| `NewEpoch`, `NewEpochAck` (with the new primary's epoch boundaries) | New primary ↔ backup |
 | `CopyShard` (log chunks) | Primary → replacement replica |
 | `Search`, `SearchReply` | Client ↔ primary |
 

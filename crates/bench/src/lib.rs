@@ -9,7 +9,10 @@
 //! changes, so every result maps to an exact commit (`experiments/README.md`).
 
 pub mod algorithm;
+pub mod checks;
+pub mod cluster;
 pub mod config;
+pub mod dataplane;
 pub mod results;
 pub mod runner;
 pub mod scenarios;

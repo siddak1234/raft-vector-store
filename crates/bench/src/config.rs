@@ -36,10 +36,12 @@ pub struct RunConfig {
     pub algorithm: String,
     /// Number of servers.
     pub servers: usize,
-    /// The network environment.
-    pub network: NetworkKind,
-    /// First and last seed, inclusive.
-    pub seeds: [u64; 2],
+    /// The network environment. Required by every scenario except model checking.
+    #[serde(default)]
+    pub network: Option<NetworkKind>,
+    /// First and last seed, inclusive. Required by every scenario except model checking.
+    #[serde(default)]
+    pub seeds: Option<[u64; 2]>,
     /// Number of closed-loop clients (steady scenario only).
     #[serde(default)]
     pub clients: usize,
@@ -50,12 +52,30 @@ pub struct RunConfig {
     /// Commands the leader appends just before it crashes (failover scenario only).
     #[serde(default)]
     pub uncommitted: usize,
+    /// Model checking: most client commands proposed in total.
+    #[serde(default)]
+    pub max_commands: Option<u8>,
+    /// Model checking: most elections each server starts.
+    #[serde(default)]
+    pub max_elections: Option<u8>,
+    /// Model checking: most times each server's heartbeat timer fires.
+    #[serde(default)]
+    pub max_heartbeats: Option<u8>,
 }
 
 impl RunConfig {
-    /// The seeds in this run's range.
-    pub fn seeds(&self) -> std::ops::RangeInclusive<u64> {
-        self.seeds[0]..=self.seeds[1]
+    /// The seeds in this run's range; none for model checking.
+    pub fn seeds(&self) -> Vec<u64> {
+        match self.seeds {
+            Some([first, last]) => (first..=last).collect(),
+            None => Vec::new(),
+        }
+    }
+
+    /// The network environment, which `load` has checked is set.
+    pub fn network(&self) -> NetworkKind {
+        self.network
+            .expect("load checks that every simulated run names its network")
     }
 }
 
@@ -69,6 +89,8 @@ pub enum Scenario {
     Figure16,
     /// E3: failover after a leader crash with uncommitted entries.
     Failover,
+    /// E6: exhaustive model checking of reachable states.
+    Modelcheck,
 }
 
 /// The network environments (`docs/RESEARCH.md` §3).
@@ -110,8 +132,27 @@ pub fn load(path: &std::path::Path) -> Result<ExperimentConfig, String> {
     let config: ExperimentConfig =
         toml::from_str(&text).map_err(|err| format!("cannot parse {}: {err}", path.display()))?;
     for run in &config.run {
-        if run.seeds[0] > run.seeds[1] {
-            return Err(format!("run {}: the seed range is empty", run.label));
+        if run.scenario == Scenario::Modelcheck {
+            if run.max_commands.is_none()
+                || run.max_elections.is_none()
+                || run.max_heartbeats.is_none()
+            {
+                return Err(format!(
+                    "run {}: model checking needs max_commands, max_elections, and \
+                     max_heartbeats",
+                    run.label
+                ));
+            }
+        } else {
+            let Some([first, last]) = run.seeds else {
+                return Err(format!("run {}: the run needs a seed range", run.label));
+            };
+            if first > last {
+                return Err(format!("run {}: the seed range is empty", run.label));
+            }
+            if run.network.is_none() {
+                return Err(format!("run {}: the run needs a network", run.label));
+            }
         }
         if run.servers == 0 {
             return Err(format!(
@@ -145,8 +186,8 @@ mod tests {
         let config: ExperimentConfig = toml::from_str(text).expect("valid");
         let run = &config.run[0];
         assert_eq!(run.scenario, Scenario::Figure16);
-        assert_eq!(run.network, NetworkKind::Paper);
-        assert_eq!(run.seeds().count(), 1000);
+        assert_eq!(run.network, Some(NetworkKind::Paper));
+        assert_eq!(run.seeds().len(), 1000);
         assert_eq!(run.election_timeout_ms, Some([150, 155]));
     }
 

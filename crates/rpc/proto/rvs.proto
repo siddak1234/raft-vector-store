@@ -128,6 +128,21 @@ service DataNode {
   rpc CopyShard(CopyShardRequest) returns (CopyShardReply);
   // The data node's measurement log, for experiment runners.
   rpc Events(Empty) returns (EventsReply);
+  // What the data node holds of one shard, for the no-lost-write check.
+  rpc Inspect(InspectRequest) returns (InspectReply);
+  // Cuts the data node off from chosen control-plane servers (`drop_to`), for partition
+  // tests. An empty request clears the faults.
+  rpc SetFaults(FaultsRequest) returns (Empty);
+}
+
+message InspectRequest {
+  // An encoded `rpc::ShardKey`.
+  bytes shard = 1;
+}
+
+message InspectReply {
+  // An encoded `rpc::ShardDump`.
+  bytes dump = 1;
 }
 
 message WriteRequest {

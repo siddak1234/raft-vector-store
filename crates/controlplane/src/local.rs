@@ -26,6 +26,10 @@ pub struct LocalOptions {
 /// Running control-plane processes. Dropping the cluster kills them.
 pub struct LocalCluster {
     binary: PathBuf,
+    data_binary: Option<PathBuf>,
+    data_nodes: Vec<(u64, String)>,
+    data_children: BTreeMap<u64, Child>,
+    data_restarts: BTreeMap<u64, u32>,
     dir: PathBuf,
     options: LocalOptions,
     servers: Vec<(u64, String)>,
@@ -61,6 +65,10 @@ impl LocalCluster {
         std::fs::write(dir.join("cluster.toml"), text).map_err(|err| err.to_string())?;
         let mut cluster = LocalCluster {
             binary: binary.to_path_buf(),
+            data_binary: None,
+            data_nodes: Vec::new(),
+            data_children: BTreeMap::new(),
+            data_restarts: BTreeMap::new(),
             dir: dir.to_path_buf(),
             options,
             servers,
@@ -145,8 +153,86 @@ impl LocalCluster {
         self.children.contains_key(&id)
     }
 
-    /// Stops every server.
+    /// Starts data nodes `1..=m` from `binary`, which find the control plane through the
+    /// cluster file.
+    ///
+    /// # Errors
+    ///
+    /// Returns a description if a port or process cannot be set up.
+    pub fn start_data_nodes(&mut self, binary: &Path, m: u64) -> Result<(), String> {
+        self.data_binary = Some(binary.to_path_buf());
+        for id in 1..=m {
+            let port = free_port()?;
+            self.data_nodes.push((id, format!("127.0.0.1:{port}")));
+            self.spawn_data(id)?;
+        }
+        Ok(())
+    }
+
+    fn spawn_data(&mut self, id: u64) -> Result<(), String> {
+        let binary = self.data_binary.clone().ok_or("no data-node binary")?;
+        let address = self
+            .data_nodes
+            .iter()
+            .find(|(n, _)| *n == id)
+            .map(|(_, a)| a.clone())
+            .ok_or(format!("no data node {id}"))?;
+        let restarts = self.data_restarts.entry(id).or_insert(0);
+        let log = self.dir.join(format!("datanode-{id}.{restarts}.log"));
+        *restarts += 1;
+        let log = std::fs::File::create(&log).map_err(|err| err.to_string())?;
+        let mut command = Command::new(&binary);
+        command
+            .arg("--id")
+            .arg(id.to_string())
+            .arg("--address")
+            .arg(&address)
+            .arg("--cluster")
+            .arg(self.dir.join("cluster.toml"))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(log);
+        if self.options.record {
+            command.arg("--record");
+        }
+        let child = command
+            .spawn()
+            .map_err(|err| format!("cannot start {}: {err}", binary.display()))?;
+        self.data_children.insert(id, child);
+        Ok(())
+    }
+
+    /// Every data node's ID and address.
+    pub fn data_nodes(&self) -> &[(u64, String)] {
+        &self.data_nodes
+    }
+
+    /// Kills data node `id` with `SIGKILL`.
+    pub fn kill_data(&mut self, id: u64) {
+        if let Some(mut child) = self.data_children.remove(&id) {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
+    /// Restarts a killed data node. It comes back empty, with a new incarnation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a description if the process cannot start.
+    pub fn restart_data(&mut self, id: u64) -> Result<(), String> {
+        if self.data_children.contains_key(&id) {
+            return Ok(());
+        }
+        self.spawn_data(id)
+    }
+
+    /// Stops every server and data node.
     pub fn stop(&mut self) {
+        let ids: Vec<u64> = self.data_children.keys().copied().collect();
+        for id in ids {
+            self.kill_data(id);
+        }
         let ids: Vec<u64> = self.children.keys().copied().collect();
         for id in ids {
             self.kill(id);
