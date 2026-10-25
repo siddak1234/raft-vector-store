@@ -1,0 +1,14 @@
+experiment = "E3"
+config = "experiments/configs/E3.toml"
+commit = "bf01783a402cceb1a8c7753915fe61f7742536cb"
+started = "2026-10-25T20:33:12Z"
+finished = "2026-10-25T21:12:53Z"
+trials = 16800
+official = true
+
+[machine]
+os = "macos"
+arch = "aarch64"
+cpu = "Apple M1 Pro"
+logical_cpus = 8
+rustc = "rustc 1.99.1 (58cf8f9c3 2026-10-13)"

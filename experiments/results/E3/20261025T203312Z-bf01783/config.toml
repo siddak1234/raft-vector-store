@@ -1,0 +1,254 @@
+# E3: failover with k uncommitted entries (docs/RESEARCH.md §6, H2a, H2b, and M10 for H3).
+# Paper-like network, 150-300 ms timeouts, 4 clients. Simulator: servers {3, 5} x
+# k {0, 10, 100, 1000}, 1000 seeds. Real cluster: k {0, 100}, 100 seeds.
+
+id = "E3"
+description = "Leader failover with uncommitted entries"
+
+[[run]]
+scenario = "failover"
+label = "3s-k0"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 0
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "3s-k0"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 0
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "3s-k10"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "3s-k10"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "3s-k100"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "3s-k100"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "3s-k1000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "3s-k1000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "5s-k0"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 0
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "5s-k0"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 0
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "5s-k10"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "5s-k10"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "5s-k100"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "5s-k100"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "5s-k1000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "5s-k1000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+environment = "real"
+label = "real-3s-k0"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 0
+seeds = [1, 100]
+
+[[run]]
+scenario = "failover"
+environment = "real"
+label = "real-3s-k0"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 0
+seeds = [1, 100]
+
+[[run]]
+scenario = "failover"
+environment = "real"
+label = "real-3s-k100"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 100]
+
+[[run]]
+scenario = "failover"
+environment = "real"
+label = "real-3s-k100"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 100]
+
+[[run]]
+scenario = "failover"
+environment = "real"
+label = "real-5s-k0"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 0
+seeds = [1, 100]
+
+[[run]]
+scenario = "failover"
+environment = "real"
+label = "real-5s-k0"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 0
+seeds = [1, 100]
+
+[[run]]
+scenario = "failover"
+environment = "real"
+label = "real-5s-k100"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 100]
+
+[[run]]
+scenario = "failover"
+environment = "real"
+label = "real-5s-k100"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 100]
