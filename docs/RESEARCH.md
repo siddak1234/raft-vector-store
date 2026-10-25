@@ -470,6 +470,42 @@ mean.
    (`docs/DESIGN.md` C1), and no acknowledged write is lost (C2). A violation of either
    is a safety violation under §10.
 
+
+### A4. 2026-10-24: Real-cluster details fixed before real-cluster data
+
+These details of the real cluster were not specified above. They were fixed in code before
+any real-cluster data was collected, and they apply to both algorithms.
+
+1. **Processes.** Each server is one `controlplane` process on `127.0.0.1` with a fresh
+   temporary data folder, deleted after the trial. Trials run one at a time.
+2. **Order.** All `(run, seed)` pairs of an experiment are shuffled once, with a seed
+   derived from the experiment's ID, and run in that order, so the algorithms (or the A/A
+   arms) are interleaved.
+3. **Delay.** The receiving server holds each consensus message for a one-way delay drawn
+   uniformly from `[0.5 d, 1.5 d]`, so a message sent just before its sender crashes still
+   arrives, as on a real network. Clients delay each request and each reply by the same
+   distribution. Waits use a timed sleep and spin for the last 300 µs.
+4. **fsync.** Storage calls `File::sync_data`, which on macOS issues `F_FULLFSYNC` (about
+   4 ms on the experiment machine). Every server's storage is on the machine's one SSD, so
+   flushes from different servers queue on one device; this bounds throughput and applies
+   equally to both algorithms.
+5. **Clients.** Clients follow A1.1. Each command is a `Bench` request whose encoding is
+   128 bytes.
+6. **Ready.** A trial starts once a client command has committed, which implies that the
+   leader's no-op has committed.
+7. **Measurement.** Every process reads the same clock. Commit latency comes from the
+   clients' timestamps; messages and bytes from the servers' logs of every consensus
+   message sent; M1 from the servers' logs of role and term changes, from the crash time
+   to the first record of a leader in a higher term.
+8. **The crash procedure (E2, E3).** The leader receives a crash request. It drops
+   messages that carry entries to the followers outside the chosen subset, appends the
+   commands, sends a heartbeat round (E2 only), records the crash time, and exits 50 ms
+   later without handling any further input. The 50 ms let messages already sent leave its
+   sockets. The subset is drawn as in A1.6 (E2) and §6 (E3), from the trial's seed.
+9. **The A/A test (§9.2).** Arm A uses seeds 1–100 and arm B seeds 101–200.
+10. **Environment.** The machine is kept awake with `caffeinate -i`, and nothing else
+    heavy runs during real-cluster experiments.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

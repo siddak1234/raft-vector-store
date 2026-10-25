@@ -39,6 +39,26 @@ service ControlPlane {
   rpc SetFaults(FaultsRequest) returns (Empty);
   // The server's measurement log, for experiment runners.
   rpc Events(Empty) returns (EventsReply);
+  // Experiment procedures: appends commands and, optionally, sends a heartbeat round,
+  // then stops the server without sending anything further (docs/RESEARCH.md §6, E2
+  // and E3).
+  rpc Crash(CrashRequest) returns (CrashReply);
+}
+
+message CrashRequest {
+  // Messages carrying log entries are dropped to these servers first.
+  repeated uint64 drop_entries_to = 1;
+  // Client commands the leader appends before it stops.
+  uint32 commands = 2;
+  // Whether to send a heartbeat round to every server before stopping.
+  bool heartbeat = 3;
+}
+
+message CrashReply {
+  // When the server stopped, in microseconds since the Unix epoch.
+  uint64 time = 1;
+  // Its term then.
+  uint64 term = 2;
 }
 
 message ProposeRequest {
@@ -106,6 +126,8 @@ message FaultsRequest {
   repeated uint64 drop_from = 2;
   // Mean one-way delay `d` in microseconds; each message waits uniformly 0.5 d to 1.5 d.
   uint64 delay_us = 3;
+  // Drop consensus messages that carry log entries to these servers.
+  repeated uint64 drop_entries_to = 4;
 }
 
 message EventsReply {

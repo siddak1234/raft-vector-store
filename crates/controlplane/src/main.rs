@@ -18,6 +18,7 @@ Options:
                              The heartbeat interval is half the minimum.
   --delay-us D               Inject a one-way delay of D microseconds on average.
   --record                   Keep the measurement log for experiment runners.
+  --seed S                   Seed the algorithm's random numbers with S plus the ID.
 ";
 
 fn main() -> ExitCode {
@@ -39,6 +40,7 @@ fn parse(args: Vec<String>) -> Result<ServerOptions, String> {
     let mut timeout = (Duration::from_millis(150), Duration::from_millis(300));
     let mut delay_us = 0;
     let mut record = false;
+    let mut seed = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         let mut value = || iter.next().ok_or(format!("{arg} needs a value"));
@@ -65,6 +67,7 @@ fn parse(args: Vec<String>) -> Result<ServerOptions, String> {
                     .map_err(|e: std::num::ParseIntError| e.to_string())?
             }
             "--record" => record = true,
+            "--seed" => seed = Some(value()?.parse::<u64>().map_err(|e| e.to_string())?),
             "--help" | "-h" => return Err(HELP.to_string()),
             other => return Err(format!("unknown option `{other}`\n\n{HELP}")),
         }
@@ -78,6 +81,7 @@ fn parse(args: Vec<String>) -> Result<ServerOptions, String> {
         election_timeout: timeout,
         delay_us,
         record,
+        seed,
         leases: LeaseTiming::default(),
     })
 }

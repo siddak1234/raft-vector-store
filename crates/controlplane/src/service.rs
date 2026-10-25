@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 
 use rpc::proto::control_plane_server::ControlPlane;
 use rpc::proto::{
-    Empty, EventsReply, FaultsRequest, HeartbeatReply, HeartbeatRequest, ProposeReply,
-    ProposeRequest, ShardMapReply, ShardMapRequest, StatusReply,
+    CrashReply, CrashRequest, Empty, EventsReply, FaultsRequest, HeartbeatReply, HeartbeatRequest,
+    ProposeReply, ProposeRequest, ShardMapReply, ShardMapRequest, StatusReply,
 };
 use tokio::sync::oneshot;
 use tonic::{Request, Response, Status};
@@ -132,7 +132,21 @@ impl ControlPlane for ControlPlaneService {
         faults.drop_to = request.drop_to.into_iter().collect();
         faults.drop_from = request.drop_from.into_iter().collect();
         faults.delay_us = request.delay_us;
+        faults.drop_entries_to = request.drop_entries_to.into_iter().collect();
         Ok(Response::new(Empty {}))
+    }
+
+    async fn crash(&self, request: Request<CrashRequest>) -> Result<Response<CrashReply>, Status> {
+        let request = request.into_inner();
+        let (time, term) = self
+            .ask(|reply| Input::Crash {
+                drop_entries_to: request.drop_entries_to,
+                commands: request.commands,
+                heartbeat: request.heartbeat,
+                reply,
+            })
+            .await?;
+        Ok(Response::new(CrashReply { time, term }))
     }
 
     async fn events(&self, _: Request<Empty>) -> Result<Response<EventsReply>, Status> {

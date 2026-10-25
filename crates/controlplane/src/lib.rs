@@ -81,6 +81,9 @@ pub struct ServerOptions {
     pub delay_us: u64,
     /// Whether to keep the measurement log for experiment runners.
     pub record: bool,
+    /// Seed of the algorithm's random number generator; each server adds its ID. `None`
+    /// seeds from the clock.
+    pub seed: Option<u64>,
     /// Lease timing.
     pub leases: LeaseTiming,
 }
@@ -137,7 +140,7 @@ fn serve<C: Inspect>(options: ServerOptions) -> Result<(), String> {
         id: options.id,
         cluster: options.cluster.ids(),
         consensus,
-        seed: rpc::now_micros() ^ options.id.0,
+        seed: options.seed.unwrap_or_else(rpc::now_micros) ^ options.id.0,
         data_dir: options.data_dir.clone(),
         record: options.record,
     };
@@ -154,7 +157,7 @@ fn serve<C: Inspect>(options: ServerOptions) -> Result<(), String> {
         Arc::clone(&shared),
         options.leases,
     );
-    let peer = PeerService::new(inputs.clone(), Arc::clone(&faults));
+    let peer = PeerService::new(options.id, inputs.clone(), Arc::clone(&faults));
     let api = ControlPlaneService::new(options.id.0, inputs, shared, faults, leases);
     log.write(&serde_json::json!({
         "event": "listening",

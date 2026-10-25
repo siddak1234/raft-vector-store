@@ -1,0 +1,28 @@
+# A/A validation on the real cluster (docs/RESEARCH.md §9.2 and amendment A1.9): Raft
+# against itself in the E1 configuration (3 servers, paper-like network, 16 clients),
+# 100 trials against 100, interleaved in random order, analyzed as unpaired samples.
+
+id = "AA-real"
+description = "Raft against itself on the real cluster, E1 configuration"
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "E1"
+arm = "A"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 16
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "E1"
+arm = "B"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 16
+seeds = [101, 200]

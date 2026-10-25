@@ -132,6 +132,7 @@ dependencies = [
  "raft",
  "rpc",
  "serde",
+ "serde_json",
  "sim",
  "stateright",
  "tokio",

@@ -67,6 +67,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         election_timeout_ms: (150, 300),
         delay_us,
         record: false,
+        seed: None,
     };
     let binary = binary_dir()?.join("controlplane");
     let mut cluster = LocalCluster::start(&binary, &dir, servers, options)?;

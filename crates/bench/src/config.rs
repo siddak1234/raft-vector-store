@@ -27,6 +27,9 @@ pub struct ExperimentConfig {
 pub struct RunConfig {
     /// The procedure to run.
     pub scenario: Scenario,
+    /// Where it runs: the simulator (the default) or a real cluster of processes.
+    #[serde(default)]
+    pub environment: Environment,
     /// A name for this run, written to every result row.
     pub label: String,
     /// The comparison arm (for example `A` or `B` in the A/A test). Empty if unused.
@@ -52,6 +55,9 @@ pub struct RunConfig {
     /// Commands the leader appends just before it crashes (failover scenario only).
     #[serde(default)]
     pub uncommitted: usize,
+    /// The partition scenario (partition scenario only).
+    #[serde(default)]
+    pub partition: Option<crate::scenarios::partition::PartitionKind>,
     /// Model checking: most client commands proposed in total.
     #[serde(default)]
     pub max_commands: Option<u8>,
@@ -89,8 +95,22 @@ pub enum Scenario {
     Figure16,
     /// E3: failover after a leader crash with uncommitted entries.
     Failover,
+    /// E5: partitions.
+    Partition,
     /// E6: exhaustive model checking of reachable states.
     Modelcheck,
+}
+
+/// Where a run's trials execute (`docs/RESEARCH.md` §3).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Environment {
+    /// The deterministic simulator.
+    #[default]
+    Simulator,
+    /// One process per server on this machine, with delay injected in the transport and
+    /// real fsync.
+    Real,
 }
 
 /// The network environments (`docs/RESEARCH.md` §3).
@@ -153,6 +173,12 @@ pub fn load(path: &std::path::Path) -> Result<ExperimentConfig, String> {
             if run.network.is_none() {
                 return Err(format!("run {}: the run needs a network", run.label));
             }
+        }
+        if run.scenario == Scenario::Partition && run.partition.is_none() {
+            return Err(format!(
+                "run {}: a partition run needs `partition`",
+                run.label
+            ));
         }
         if run.servers == 0 {
             return Err(format!(

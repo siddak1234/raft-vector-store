@@ -186,6 +186,7 @@ impl Env {
             election_timeout_ms: (150, 300),
             delay_us: 0,
             record: true,
+            seed: None,
         };
         let mut cluster =
             LocalCluster::start(&bins.join("controlplane"), &fresh_dir(label), 3, options)?;
@@ -437,6 +438,7 @@ async fn set_control_faults(env: &Env, id: u64, drop: Vec<u64>) -> Result<(), St
         drop_to: drop.clone(),
         drop_from: drop,
         delay_us: 0,
+        drop_entries_to: Vec::new(),
     };
     raw.set_faults(request)
         .await
@@ -525,6 +527,7 @@ async fn fault_test(
                     drop_to: all,
                     drop_from: Vec::new(),
                     delay_us: 0,
+                    drop_entries_to: Vec::new(),
                 })
                 .await
                 .map_err(|err| err.to_string())?;

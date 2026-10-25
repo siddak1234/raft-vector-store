@@ -62,6 +62,7 @@ async fn exercise(algorithm: Algorithm, name: &str) {
         election_timeout_ms: (150, 300),
         delay_us: 0,
         record: false,
+        seed: None,
     };
     let mut cluster = LocalCluster::start(&binary(), &dir, 3, options).expect("cluster starts");
     let servers = cluster.servers().to_vec();

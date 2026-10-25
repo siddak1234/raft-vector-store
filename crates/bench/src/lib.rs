@@ -13,6 +13,7 @@ pub mod checks;
 pub mod cluster;
 pub mod config;
 pub mod dataplane;
+pub mod real;
 pub mod results;
 pub mod runner;
 pub mod scenarios;

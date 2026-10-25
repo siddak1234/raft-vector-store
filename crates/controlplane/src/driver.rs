@@ -77,6 +77,44 @@ pub enum Input {
         /// Where to send it.
         reply: oneshot::Sender<Events>,
     },
+    /// An experiment procedure: append `commands` commands, with messages carrying entries
+    /// dropped to `drop_entries_to`, optionally send a heartbeat round, then stop.
+    Crash {
+        /// Servers that do not receive the new entries.
+        drop_entries_to: Vec<u64>,
+        /// Commands to append.
+        commands: u32,
+        /// Whether to send a heartbeat round first.
+        heartbeat: bool,
+        /// Where to send the time and term of the crash.
+        reply: oneshot::Sender<(u64, u64)>,
+    },
+}
+
+/// Size of every experiment command in bytes, as in the simulator (`docs/RESEARCH.md` §3).
+pub const COMMAND_BYTES: usize = 128;
+
+/// A `Bench` request whose encoding is [`COMMAND_BYTES`] long.
+pub fn bench_request(client: u64, seq: u64) -> Request {
+    let mut request = Request {
+        client,
+        seq,
+        command: ControlCommand::Bench {
+            padding: Vec::new(),
+        },
+    };
+    let base = rpc::encode(&request).len();
+    let mut padding = COMMAND_BYTES.saturating_sub(base + 1);
+    loop {
+        request.command = ControlCommand::Bench {
+            padding: vec![0; padding],
+        };
+        let size = rpc::encode(&request).len();
+        if size <= COMMAND_BYTES || padding == 0 {
+            return request;
+        }
+        padding -= size - COMMAND_BYTES;
+    }
 }
 
 /// What the network side of the server reads without asking the driver thread.
@@ -206,6 +244,15 @@ pub fn run<C: Inspect>(
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
             .unwrap_or(Duration::from_secs(3600));
         match inputs.recv_timeout(timeout) {
+            Ok(Input::Crash {
+                drop_entries_to,
+                commands,
+                heartbeat,
+                reply,
+            }) => {
+                driver.crash(drop_entries_to, commands, heartbeat, reply);
+                return;
+            }
             Ok(input) => driver.handle(input),
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
@@ -261,12 +308,52 @@ impl<C: Inspect> Driver<C> {
                     }
                 }
             }
+            Input::Crash { .. } => unreachable!("the run loop handles crashes"),
             Input::Events { reply } => {
                 self.events.max_log_gaps = self.storage.max_gaps();
                 self.events.discarded_entries = self.storage.discarded();
                 let _ = reply.send(self.events.clone());
             }
         }
+    }
+
+    /// Runs the crash procedure, then stops the process without handling another input.
+    fn crash(
+        &mut self,
+        drop_entries_to: Vec<u64>,
+        commands: u32,
+        heartbeat: bool,
+        reply: oneshot::Sender<(u64, u64)>,
+    ) {
+        self.outbound
+            .faults()
+            .lock()
+            .expect("no thread panicked")
+            .drop_entries_to = drop_entries_to.into_iter().collect();
+        let client = rpc::now_micros();
+        for seq in 1..=u64::from(commands) {
+            let command = Command(rpc::encode(&bench_request(client, seq)));
+            if let Ok(outputs) = self.node.propose(&mut self.storage, command) {
+                self.finish(outputs);
+            }
+        }
+        if heartbeat {
+            let outputs = self.node.on_timer(&mut self.storage, Timer::Heartbeat);
+            self.finish(outputs);
+        }
+        let time = rpc::now_micros();
+        let term = self.node.status().term.0;
+        self.log.write(&serde_json::json!({
+            "event": "crash",
+            "server": self.id.0,
+            "time": time,
+            "term": term,
+        }));
+        let _ = reply.send((time, term));
+        // Give the network tasks a moment to put the last messages on the wire, then stop
+        // the process. No input is handled after the crash instant.
+        std::thread::sleep(Duration::from_millis(50));
+        std::process::exit(0);
     }
 
     fn propose(&mut self, mut request: Request, reply: oneshot::Sender<Proposed>) {
@@ -337,7 +424,8 @@ impl<C: Inspect> Driver<C> {
                             entries: C::entry_count(&message) as u64,
                         });
                     }
-                    self.outbound.send(to, bytes);
+                    let entries = C::entry_count(&message);
+                    self.outbound.send(to, bytes, entries);
                 }
                 Output::SetTimer { timer, after } => {
                     self.timers.insert(timer, Instant::now() + after);

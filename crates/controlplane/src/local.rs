@@ -21,6 +21,8 @@ pub struct LocalOptions {
     pub delay_us: u64,
     /// Whether servers keep the measurement log.
     pub record: bool,
+    /// Seed of the servers' random numbers, if fixed.
+    pub seed: Option<u64>,
 }
 
 /// Running control-plane processes. Dropping the cluster kills them.
@@ -111,6 +113,9 @@ impl LocalCluster {
         if self.options.record {
             command.arg("--record");
         }
+        if let Some(seed) = self.options.seed {
+            command.arg("--seed").arg(seed.to_string());
+        }
         let child = command
             .spawn()
             .map_err(|err| format!("cannot start {}: {err}", self.binary.display()))?;
@@ -151,6 +156,14 @@ impl LocalCluster {
     /// Whether server `id` is running.
     pub fn is_running(&self, id: u64) -> bool {
         self.children.contains_key(&id)
+    }
+
+    /// Records that server `id` stopped by itself, as after the crash procedure, and
+    /// reaps its process.
+    pub fn reap(&mut self, id: u64) {
+        if let Some(mut child) = self.children.remove(&id) {
+            let _ = child.wait();
+        }
     }
 
     /// Starts data nodes `1..=m` from `binary`, which find the control plane through the

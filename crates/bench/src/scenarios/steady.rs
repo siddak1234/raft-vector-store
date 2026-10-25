@@ -17,20 +17,20 @@ const MEASURE: Duration = Duration::from_secs(10);
 /// One E1 trial.
 #[derive(Debug, Clone)]
 pub struct SteadyRow {
-    run: String,
-    seed: u64,
-    ready: bool,
+    pub(crate) run: String,
+    pub(crate) seed: u64,
+    pub(crate) ready: bool,
     /// Commit replies received during the measurement window.
-    commits: u64,
+    pub(crate) commits: u64,
     /// Median and 99th-percentile commit latency in milliseconds (metric M7).
-    median_ms: Option<f64>,
-    p99_ms: Option<f64>,
+    pub(crate) median_ms: Option<f64>,
+    pub(crate) p99_ms: Option<f64>,
     /// Commits per second (metric M8).
-    throughput: f64,
+    pub(crate) throughput: f64,
     /// Messages and bytes between servers per commit (metric M9).
-    messages_per_commit: Option<f64>,
-    bytes_per_commit: Option<f64>,
-    violations: u64,
+    pub(crate) messages_per_commit: Option<f64>,
+    pub(crate) bytes_per_commit: Option<f64>,
+    pub(crate) violations: u64,
 }
 
 impl Row for SteadyRow {

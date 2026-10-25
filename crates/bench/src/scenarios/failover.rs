@@ -37,24 +37,24 @@ const CAP: Duration = Duration::from_secs(60);
 /// One E3 trial.
 #[derive(Debug, Clone)]
 pub struct FailoverRow {
-    run: String,
-    seed: u64,
+    pub(crate) run: String,
+    pub(crate) seed: u64,
     /// Whether the procedure ran: a first leader was elected, and a leader existed at the
     /// moment of the crash. Trials that are not ready have no measurement.
-    ready: bool,
-    censored: bool,
-    followers_with_entries: usize,
-    time_without_leader_ms: f64,
-    unavailability_ms: Option<f64>,
-    election_rounds: usize,
-    election_messages: u64,
-    election_bytes: u64,
-    stale_log_rejections: Option<u64>,
-    resent_entries: Option<u64>,
-    max_log_gaps: u64,
-    discarded_entries: u64,
-    entries_to_leaders: u64,
-    violations: u64,
+    pub(crate) ready: bool,
+    pub(crate) censored: bool,
+    pub(crate) followers_with_entries: usize,
+    pub(crate) time_without_leader_ms: f64,
+    pub(crate) unavailability_ms: Option<f64>,
+    pub(crate) election_rounds: usize,
+    pub(crate) election_messages: u64,
+    pub(crate) election_bytes: u64,
+    pub(crate) stale_log_rejections: Option<u64>,
+    pub(crate) resent_entries: Option<u64>,
+    pub(crate) max_log_gaps: u64,
+    pub(crate) discarded_entries: u64,
+    pub(crate) entries_to_leaders: u64,
+    pub(crate) violations: u64,
 }
 
 impl Row for FailoverRow {

@@ -33,20 +33,20 @@ const START_SPREAD: Duration = Duration::from_millis(300);
 /// One E2 trial.
 #[derive(Debug, Clone)]
 pub struct Figure16Row {
-    run: String,
-    seed: u64,
+    pub(crate) run: String,
+    pub(crate) seed: u64,
     /// Whether the procedure ran: a first leader was elected, and a leader existed at the
     /// moment of the crash. Trials that are not ready have no measurement.
-    ready: bool,
+    pub(crate) ready: bool,
     /// Time from the crash until a new leader is elected (metric M1), in milliseconds.
-    time_without_leader_ms: f64,
+    pub(crate) time_without_leader_ms: f64,
     /// Whether the trial reached the cap without a new leader.
-    censored: bool,
+    pub(crate) censored: bool,
     /// Terms in which some server became candidate before the new leader (metric M3).
-    election_rounds: usize,
+    pub(crate) election_rounds: usize,
     /// Followers that received the leader's last entry.
-    followers_with_entry: usize,
-    violations: u64,
+    pub(crate) followers_with_entry: usize,
+    pub(crate) violations: u64,
 }
 
 impl Row for Figure16Row {

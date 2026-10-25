@@ -6,6 +6,7 @@
 pub mod failover;
 pub mod figure16;
 pub mod modelcheck;
+pub mod partition;
 pub mod steady;
 pub mod validation;
 
@@ -18,7 +19,7 @@ use raft::Raft;
 use sim::{Observer, SimConfig, Simulation};
 
 use crate::algorithm::{Algorithm, Kind};
-use crate::config::{ExperimentConfig, RunConfig, Scenario};
+use crate::config::{Environment, ExperimentConfig, RunConfig, Scenario};
 use crate::results::{self, Output};
 use crate::runner::run_parallel;
 
@@ -47,7 +48,7 @@ pub fn run_experiment(
         config
             .run
             .iter()
-            .filter(|run| run.scenario == scenario)
+            .filter(|run| run.scenario == scenario && run.environment == Environment::Simulator)
             .flat_map(|run| {
                 let seeds = run.seeds();
                 let limit = seed_limit.unwrap_or(u64::MAX) as usize;
@@ -108,6 +109,128 @@ pub fn run_experiment(
         });
         results::write_csv(output, "failover.csv", &rows)?;
         trials += rows.len();
+    }
+    let partition = jobs(Scenario::Partition);
+    if !partition.is_empty() {
+        eprintln!("partition: {} trials", partition.len());
+        let rows = run_parallel(&partition, 500, |(run, seed)| {
+            let scenario = run.partition.expect("load checks partition runs");
+            match kind(run) {
+                Kind::Raft => partition::trial::<Raft>(run, *seed, scenario),
+                Kind::Paxos => partition::trial::<Paxos>(run, *seed, scenario),
+            }
+        });
+        results::write_csv(output, "partition.csv", &rows)?;
+        trials += rows.len();
+    }
+    trials += run_real(config, output, seed_limit)?;
+    Ok(trials)
+}
+
+/// Runs every real-cluster trial of an experiment, one at a time in a random order fixed
+/// by the experiment's ID, and writes the rows of each scenario in config order.
+fn run_real(
+    config: &ExperimentConfig,
+    output: &Output,
+    seed_limit: Option<u64>,
+) -> Result<usize, String> {
+    let mut jobs: Vec<(usize, &RunConfig, u64)> = config
+        .run
+        .iter()
+        .filter(|run| run.environment == Environment::Real)
+        .flat_map(|run| {
+            let limit = seed_limit.unwrap_or(u64::MAX) as usize;
+            run.seeds()
+                .into_iter()
+                .take(limit)
+                .map(move |seed| (run, seed))
+        })
+        .enumerate()
+        .map(|(order, (run, seed))| (order, run, seed))
+        .collect();
+    if jobs.is_empty() {
+        return Ok(0);
+    }
+    // Interleave the algorithms and arms in a random order, the same on every run of the
+    // experiment (`docs/PLAN.md` §5, rule 6).
+    let mut rng = Rng::new(config.id.bytes().fold(0xC0FFEE, |h, b| {
+        h.wrapping_mul(31).wrapping_add(u64::from(b))
+    }));
+    for i in (1..jobs.len()).rev() {
+        let j = rng.below(i as u64 + 1) as usize;
+        jobs.swap(i, j);
+    }
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| err.to_string())?;
+    let total = jobs.len();
+    let mut steady_rows = Vec::new();
+    let mut figure16_rows = Vec::new();
+    let mut failover_rows = Vec::new();
+    let mut partition_rows = Vec::new();
+    for (done, (order, run, seed)) in jobs.into_iter().enumerate() {
+        if done % 10 == 0 {
+            eprintln!("  real cluster: {done} / {total} trials");
+        }
+        match run.scenario {
+            Scenario::Steady => {
+                steady_rows.push((order, runtime.block_on(crate::real::steady(run, seed))))
+            }
+            Scenario::Figure16 => {
+                figure16_rows.push((order, runtime.block_on(crate::real::figure16(run, seed))))
+            }
+            Scenario::Failover => {
+                failover_rows.push((order, runtime.block_on(crate::real::failover(run, seed))))
+            }
+            Scenario::Partition => {
+                let kind = match run.partition {
+                    Some(partition::PartitionKind::P1) => crate::real::Partition::LeaderAlone,
+                    Some(partition::PartitionKind::P3) => crate::real::Partition::FollowerAlone,
+                    other => {
+                        return Err(format!(
+                            "run {}: {other:?} is not run on a real cluster",
+                            run.label
+                        ));
+                    }
+                };
+                partition_rows.push((
+                    order,
+                    runtime.block_on(crate::real::partition(run, seed, kind)),
+                ));
+            }
+            Scenario::Modelcheck => {
+                return Err(format!(
+                    "run {}: model checking has no real cluster",
+                    run.label
+                ));
+            }
+        }
+    }
+    let mut trials = 0;
+    fn sorted<R>(mut rows: Vec<(usize, R)>) -> Vec<R> {
+        rows.sort_by_key(|(order, _)| *order);
+        rows.into_iter().map(|(_, row)| row).collect()
+    }
+    if !steady_rows.is_empty() {
+        let rows = sorted(steady_rows);
+        trials += rows.len();
+        results::write_csv(output, "real-steady.csv", &rows)?;
+    }
+    if !figure16_rows.is_empty() {
+        let rows = sorted(figure16_rows);
+        trials += rows.len();
+        results::write_csv(output, "real-figure16.csv", &rows)?;
+    }
+    if !failover_rows.is_empty() {
+        let rows = sorted(failover_rows);
+        trials += rows.len();
+        results::write_csv(output, "real-failover.csv", &rows)?;
+    }
+    if !partition_rows.is_empty() {
+        let rows = sorted(partition_rows);
+        trials += rows.len();
+        results::write_csv(output, "real-partition.csv", &rows)?;
     }
     Ok(trials)
 }
@@ -188,12 +311,12 @@ fn shuffled_followers(ids: &[NodeId], leader: NodeId, rng: &mut Rng) -> Vec<Node
     followers
 }
 
-fn ms(duration: Duration) -> f64 {
+pub(crate) fn ms(duration: Duration) -> f64 {
     duration.as_secs_f64() * 1000.0
 }
 
 /// The median of sorted values; the mean of the two middle values for an even count.
-fn median(sorted: &[f64]) -> f64 {
+pub(crate) fn median(sorted: &[f64]) -> f64 {
     match sorted.len() {
         0 => f64::NAN,
         n if n % 2 == 1 => sorted[n / 2],
@@ -202,7 +325,7 @@ fn median(sorted: &[f64]) -> f64 {
 }
 
 /// The nearest-rank percentile of sorted values, for `p` in (0, 100].
-fn percentile(sorted: &[f64], p: f64) -> f64 {
+pub(crate) fn percentile(sorted: &[f64], p: f64) -> f64 {
     if sorted.is_empty() {
         return f64::NAN;
     }
@@ -211,7 +334,7 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 }
 
 /// The columns that describe a run, written at the start of every result row.
-fn run_columns(run: &RunConfig) -> String {
+pub(crate) fn run_columns(run: &RunConfig) -> String {
     let [min, max] = run.election_timeout_ms.unwrap_or([150, 300]);
     format!(
         "{},{},{},{},{},{},{min},{max},{}",
