@@ -1,0 +1,3 @@
+label,arm,algorithm,servers,network,clients,election_timeout_min_ms,election_timeout_max_ms,uncommitted,max_commands,max_elections,max_heartbeats,complete,states,search_states,generated,max_depth,seconds,election_safety,state_machine_safety,command_committed
+c0-e1-h0,,raft,3,,0,150,300,0,0,1,0,true,37125265,37389340,219455251,32,126.9491,true,true,false
+c0-e1-h0,,paxos,3,,0,150,300,0,0,1,0,true,35753384,36494539,226623590,28,169.5755,true,true,false
