@@ -1,8 +1,8 @@
 //! File-backed storage with fsync (`docs/PLAN.md` §8, Phase 3).
 //!
-//! Every write is appended to a write-ahead log, and [`Storage::sync`] flushes the appended
-//! records and calls `fsync` (`File::sync_data`, which on macOS issues `F_FULLFSYNC`). On
-//! start, the log is replayed. A record cut short by a crash during a write is ignored,
+//! Every write is appended to a write-ahead log, and [`Storage::sync`] writes the appended
+//! records and calls `fsync(2)` (`docs/RESEARCH.md` amendment A6). On start, the log is
+//! replayed. A record cut short by a crash during a write is ignored,
 //! which is safe because the driver never acts on a write before `sync` returns.
 //!
 //! The wrapper also measures, in shared code, the log gaps (metric M15) and the entries
@@ -35,12 +35,13 @@ pub enum FsyncMode {
 }
 
 impl FsyncMode {
-    /// The mode named by the `RVS_FSYNC` environment variable (`full` or `plain`); `full`
-    /// if it is unset.
+    /// The mode named by the `RVS_FSYNC` environment variable (`full` or `plain`); `plain`
+    /// if it is unset. Experiments use `plain` (`docs/RESEARCH.md` amendment A6); `full`
+    /// would also survive a power failure.
     pub fn from_env() -> FsyncMode {
         match std::env::var("RVS_FSYNC").as_deref() {
-            Ok("plain") => FsyncMode::Plain,
-            _ => FsyncMode::Full,
+            Ok("full") => FsyncMode::Full,
+            _ => FsyncMode::Plain,
         }
     }
 }

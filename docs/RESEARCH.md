@@ -567,6 +567,39 @@ both algorithms.
    so an acknowledgment already in flight from the killed primary does not count. Trials
    are capped at 60 s.
 
+### A6. 2026-10-25: Real-cluster A/A failure and the harness fix
+
+**Outcome.** The real-cluster A/A test (§9.2, amendment A1.9) failed. Results:
+`experiments/results/AA-real/20261025T015302Z-b0bd0c9`. No Holm-corrected test was
+significant, and four of the five E1 ratio intervals lay within [0.95, 1.05], but the p99
+commit latency interval was [0.942, 0.991] (arm A 264.2 ms, arm B 254.6 ms).
+
+**Cause.** The arms differ only in their seeds, which set election timeouts and so do not
+act during steady state; the p99 of a trial did not drift with its position in the run
+order (correlation 0.07). The harness was noisy. Each trial committed only about 900
+commands, because every commit waited for `F_FULLFSYNC` (amendment A4.4, about 4 ms) on
+the leader and on each follower, and the three servers' flushes queued on the machine's one
+SSD. A trial's p99 was therefore about its 9th-slowest commit, and occasional stalls of the
+shared device made it vary widely between trials (standard deviation 42–70 ms, maximum
+830 ms).
+
+**Fix.** Storage on the real cluster calls `fsync(2)` instead of `F_FULLFSYNC`; setting
+`RVS_FSYNC=full` restores `F_FULLFSYNC`. Every write
+still reaches the drive before the server acts on it, which is what the faults the
+experiments inject, process crashes, require; it is no longer forced out of the drive's
+own cache, which only a power failure would need. Both algorithms use the same storage, so
+the comparison is unchanged. Amendment A4.4 is replaced by this rule.
+
+**Check of the fix.** Before the official rerun, a scratch A/A run with 25 trials per arm
+showed: the p99 coefficient of variation across trials fell from
+0.209 to 0.039, and every E1 ratio interval lay within [0.95, 1.05] (p99: [0.993, 1.011]).
+Median commit latency fell from 173 ms to 36 ms and throughput rose from 90 to 445 commits
+per second, close to the simulator's A/A results (31.7 ms, 502 per second). It was not part of the pre-registered protocol.
+
+**Decision.** The real-cluster A/A test is rerun in full with the fixed harness, and E2 on
+the real cluster is rerun with it too, so every real-cluster result comes from one
+harness. The failed run and the first E2 run stay in the repository and are reported.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

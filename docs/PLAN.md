@@ -266,7 +266,7 @@ These rules make the comparison apples to apples:
 9. **Two environments:**
    - **Simulator:** exact message counts and a controlled delay model.
    - **Real cluster:** localhost with delay injected in the transport, plus real fsync
-     (details in `docs/RESEARCH.md` amendment A4).
+     (details in `docs/RESEARCH.md` amendments A4 and A6).
 
    Delay is set so the broadcast time is about 1 ms (LAN) or about 15 ms (the setup
    behind the paper's Figure 16).
@@ -411,11 +411,14 @@ results are recorded.
 
 ### Phase 4: Vector Store Data Plane
 
-- [ ] **Milestone A, one copy per shard:**
+- [x] **Milestone A, the data path:**
   - data node, brute-force search
   - registration, heartbeats, leases
   - routing client, CLI
   - ANN-Benchmarks loader
+
+  Milestones A and B were built together. A shard with one copy cannot accept writes while
+  `minInSync` is 2 (`docs/DESIGN.md` §4), so Milestone A was never run on its own.
 - [x] **Milestone B, replication:**
   - in-sync set rules, minimum in-sync size, promotion
   - discarding unacknowledged writes on promotion
@@ -439,9 +442,8 @@ results are recorded.
 - In every test, including the partition tests, the single-primary and no-lost-write checks
   pass.
 
-**Status:** the exit criteria are met for both algorithms (`cargo xtask dataplane`; results
-in `docs/RESULTS.md`). The Milestone A checkbox is open until its wording is settled: a
-shard with one copy cannot accept writes while `minInSync` is 2.
+**Status:** done. The exit criteria are met for both algorithms (`cargo xtask dataplane`;
+results in `docs/RESULTS.md`).
 
 ### Phase 5: Experiments
 
@@ -531,7 +533,7 @@ consensus.
 | The simulator and localhost differ from a real network | Delay injection, results reported for both environments, limitation stated in the report |
 | The data plane is the largest build item | It does not affect RQ1–RQ5, so it is built after both consensus modules pass verification |
 | Exhaustive model checking does not fit in memory at the bounds of `docs/RESEARCH.md` §6 | A fixed ladder of smaller bounds, reported rung by rung (amendment A5) |
-| Real-cluster throughput is bound by disk flushes on the machine's one SSD | The same for both algorithms; stated as a threat to validity |
+| Real-cluster throughput is bound by disk flushes on the machine's one SSD | Storage calls `fsync(2)` rather than `F_FULLFSYNC` (amendment A6); the same for both algorithms; stated as a threat to validity |
 | Heavy jobs on the same machine add noise to real-cluster timings | Experiments run one at a time on an otherwise idle machine (amendment A4.10) |
 
 ## 13. References
