@@ -222,6 +222,40 @@ request. Rule 4 under Leaders counts only `Accepted` replies whose round is at l
 request's round. The research protocol records the same detail (`docs/RESEARCH.md`,
 amendment A1.3).
 
+### A2. 2026-10-24: Implementation details fixed before data collection
+
+These details are not specified above. They were fixed in `crates/paxos` before any
+Multi-Paxos data was collected.
+
+1. **Empty ranges.** An `Accepted` acknowledges the indexes `firstIndex ..= lastIndex`; the
+   range is empty when `lastIndex < firstIndex`. The reply to an empty `Accept` uses the
+   `Accept`'s `firstIndex`, and the reply to a `Commit` uses
+   `commitIndex + 1 ..= commitIndex`.
+2. **`Commit` from an earlier term.** Rule 4 under Followers covers only
+   `term ≥ currentTerm`. A `Commit` with a lower term is answered like an `Accept` with a
+   lower term: `Accepted(currentTerm, success = false)`, so the old leader learns of the
+   newer term.
+3. **Rounds in replies to `Commit`.** An `Accepted` that answers a `Commit` carries round 0,
+   so it never counts toward a leadership confirmation, which counts only replies to
+   heartbeats (amendment A1).
+4. **`Commit` flow control.** At most one `Commit` per follower is unanswered at a time.
+   The leader sends the next one when the follower reports a commit index at or above the
+   first index of the outstanding one, and may resend after its next heartbeat. This plays
+   the role of Raft's probing mode (`docs/RESEARCH.md` amendment A1.4): replies to
+   pipelined `Accept` messages do not each trigger the same `Commit`.
+5. **Tracking acknowledgments.** For each follower the leader keeps the lowest index above
+   `baseIndex` the follower has not accepted in `currentTerm`, the accepted indexes above
+   it, and the next index never sent. A heartbeat sends the oldest unacknowledged entries,
+   as rule 2 under Leaders states. New entries are sent from the next index never sent, and
+   `max_entries_in_flight` counts from the lowest unacknowledged index.
+6. **`followerCommit` is the latest report, not the highest.** A follower that restarts
+   reports commit index 0, and the leader must then send it `Commit` messages again.
+7. **Acceptance sets of chosen indexes are dropped.** Once an index is committed, the leader
+   no longer needs `accepted[i]` for it. This saves memory only.
+8. **Ranks.** `rank(s)` uses the cluster's IDs sorted in ascending order with duplicates
+   removed. With IDs `1..=N`, the server with ID `r + 1` owns the terms `t` with
+   `t mod N = r`.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm
