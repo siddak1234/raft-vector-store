@@ -403,11 +403,17 @@ state. Results are in `docs/RESULTS.md`.
       export (each server's measurement log, read over its API)
 - [x] Real-cluster E2 at 150–300 ms, deferred to this phase by `docs/RESEARCH.md`
       amendment A1.6
-- [ ] Real-cluster A/A test, deferred to this phase by amendment A1.9
+- [x] Real-cluster A/A test, deferred to this phase by amendment A1.9
 
 **Exit:** for both algorithms, writes resume after a `kill -9` of the leader, and a
 restarted server catches up. The real-cluster A/A test passes, and the real-cluster E2
 results are recorded.
+
+**Status:** done. Writes resume after `kill -9` of the leader under both algorithms, and the
+restarted server catches up. The real-cluster A/A test failed once, on p99 latency, because
+`F_FULLFSYNC` on the machine's one SSD made the harness noisy; amendment A6 records the fix,
+`fsync(2)`, and the rerun passed. E2 on the real cluster matches the simulator at the
+median. Results are in `docs/RESULTS.md`.
 
 ### Phase 4: Vector Store Data Plane
 

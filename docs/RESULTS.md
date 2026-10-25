@@ -202,28 +202,31 @@ committed index. It passes for both algorithms and runs in CI on every push.
 ### E2 on the real cluster (`docs/RESEARCH.md` amendment A1.6)
 
 `cargo xtask experiment E2-real`, results in
-`experiments/results/E2-real/20261025T015147Z-a4fea84`. Five server processes, the
+`experiments/results/E2-real/20261025T051053Z-4033616`. Five server processes, the
 paper-like delay injected in the transport, 150–300 ms election timeouts, 100 trials of the
-Figure 16 procedure (amendment A4.8).
+Figure 16 procedure (amendment A4.8), with the harness of amendment A6.
 
 | | Real cluster | Simulator (Phase 1) |
 |---|---|---|
 | Trials (ready, censored) | 100 (100, 0) | 1,000 |
-| Median time without a leader | 242.6 ms | 210.8 ms |
-| Mean | 280.3 ms | 228.8 ms |
-| p99 | 568.1 ms | 461.3 ms |
-| Maximum | 612.0 ms | 728.7 ms |
+| Median time without a leader | 208.9 ms | 210.8 ms |
+| Mean | 237.5 ms | 228.8 ms |
+| p99 | 450.2 ms | 461.3 ms |
+| Maximum | 492.5 ms | 728.7 ms |
 | Election rounds (median) | 1 | 1 |
 
-Figure: `analysis/figures/E2_real.png`. The real cluster is about 30 ms slower at the
-median; it adds process scheduling, the gRPC stack, and real fsync to every step of the
-election, which the simulator does not model.
+Figure: `analysis/figures/E2_real.png`. The real cluster's distribution matches the
+simulator's at the median. The first run, with `F_FULLFSYNC`
+(`experiments/results/E2-real/20261025T015147Z-a4fea84`), had a median of 242.6 ms; amendment
+A6 explains why it was rerun.
 
-### The A/A test on the real cluster (`docs/RESEARCH.md` §9.2, amendment A1.9)
+### The A/A test on the real cluster (`docs/RESEARCH.md` §9.2, amendments A1.9 and A6)
 
-`cargo xtask experiment AA-real`, results in
-`experiments/results/AA-real/20261025T015302Z-b0bd0c9`. Raft against itself, 3 servers,
-paper-like delay, 16 clients, seeds 1–100 (arm A) against 101–200 (arm B), interleaved.
+`cargo xtask experiment AA-real`. Raft against itself, 3 servers, paper-like delay, 16
+clients, seeds 1–100 (arm A) against 101–200 (arm B), interleaved.
+
+**First run, failed** (`experiments/results/AA-real/20261025T015302Z-b0bd0c9`, storage with
+`F_FULLFSYNC`):
 
 | E1 metric | Arm A | Arm B | Ratio B/A, 90% CI | Within [0.95, 1.05] | Holm p |
 |---|---|---|---|---|---|
@@ -233,13 +236,25 @@ paper-like delay, 16 clients, seeds 1–100 (arm A) against 101–200 (arm B), i
 | Messages per commit (M9) | 4.897 | 4.893 | [0.995, 1.003] | yes | 1.00 |
 | Bytes per commit (M9) | 654.2 | 654.5 | [0.990, 1.014] | yes | 1.00 |
 
-**Verdict: fail.** No test is significant, but the p99 interval falls below 0.95.
+The p99 of a trial was about its 9th-slowest of some 900 commits, because every commit
+waited for a 4 ms `F_FULLFSYNC` on all three servers, whose flushes queued on the machine's
+one SSD. It varied widely between trials (standard deviation 42–70 ms) and did not drift
+with the run order. Amendment A6 records the cause and the fix: storage calls `fsync(2)`.
 
-The p99 of a trial is about its 9th-slowest of some 900 commits, because every commit waits
-for a 4 ms `F_FULLFSYNC` on all three servers, whose flushes queue on the machine's one SSD
-(amendment A4.4). It varies widely between trials (standard deviation 42–70 ms) and did not
-drift with the run order. Phase 3 does not close until the harness is fixed and the test
-passes (§9.2).
+**Rerun with the fixed harness, passed**
+(`experiments/results/AA-real/20261025T051159Z-c538caf`):
+
+| E1 metric | Arm A | Arm B | Ratio B/A, 90% CI | Within [0.95, 1.05] | Holm p |
+|---|---|---|---|---|---|
+| Median commit latency (M7) | 34.20 ms | 34.12 ms | [0.995, 1.001] | yes | 1.00 |
+| p99 commit latency (M7) | 47.90 ms | 48.11 ms | [0.996, 1.015] | yes | 1.00 |
+| Throughput (M8) | 465 /s | 466 /s | [0.999, 1.004] | yes | 1.00 |
+| Messages per commit (M9) | 4.326 | 4.332 | [0.999, 1.004] | yes | 1.00 |
+| Bytes per commit (M9) | 977.7 | 979.3 | [0.996, 1.006] | yes | 1.00 |
+
+**Verdict: pass.** Every E1 interval lies within [0.95, 1.05], and no Holm-corrected test
+is significant. The real cluster now behaves much like the simulator, whose A/A run had a
+31.7 ms median latency and 502 commits per second.
 
 ## Phase 4: Vector Store Data Plane
 
