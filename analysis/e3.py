@@ -42,11 +42,15 @@ def h2a(frame) -> None:
             a, b = paired(group, "election_bytes", group["uncommitted"] == 0, group["uncommitted"] == 1000)
             ratio, low, high = ratio_of_medians(a, b, paired=True)
             alternative = "greater" if algorithm == "paxos" else "two-sided"
-            rows.append((servers, algorithm, len(a), np.median(a), np.median(b), ratio, low, high,
+            m0 = float(np.median(a)) if len(a) else float("nan")
+            m1 = float(np.median(b)) if len(b) else float("nan")
+            rows.append((servers, algorithm, len(a), m0, m1, ratio, low, high,
                          wilcoxon(a, b, alternative=alternative)))
     adjusted = holm([r[8] for r in rows])
     for (servers, algorithm, n, m0, m1, ratio, low, high, _), p in zip(rows, adjusted):
-        if algorithm == "paxos":
+        if n == 0:
+            result = "no data"
+        elif algorithm == "paxos":
             result = "grows (supported)" if p < ALPHA and m1 > m0 else "does not grow"
         else:
             result = "equivalent (supported)" if equivalent(low, high) else "not equivalent"

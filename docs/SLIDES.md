@@ -5,7 +5,7 @@ paginate: true
 ---
 
 <!-- Status: the results slides (marked "Pending") are filled in from the Phase 5 runs at
-data-v3 (docs/RESEARCH.md amendments A7 and A8). Every other slide is complete. -->
+data-v4 (docs/RESEARCH.md amendments A7-A9). Every other slide is complete. -->
 
 # Raft vs. Multi-Paxos on a Vector Store Control Plane
 
@@ -127,7 +127,7 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 
 ## Results: validation
 
-*Pending: checkers, A/A tests, and E2 at `data-v3`.*
+*Pending: checkers, A/A tests, and E2 at `data-v4`.*
 
 ---
 

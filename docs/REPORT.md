@@ -4,8 +4,8 @@
 **Siddak Bhatia (sb56878), Harrison Held (HWH492)**
 
 > **Status:** sections 1–3, 5, and the references are complete. Section 4 (results) and
-> section 6 (conclusion) are written from the Phase 5 runs at `data-v3`
-> (`docs/RESEARCH.md` amendments A7 and A8), which have not been made yet.
+> section 6 (conclusion) are written from the Phase 5 runs at `data-v4`
+> (`docs/RESEARCH.md` amendments A7–A9), which have not been made yet.
 
 ## Abstract
 
@@ -20,7 +20,7 @@ to consider. The research questions, metrics, experiments, sample sizes, and sta
 tests were fixed in a research protocol before any data was collected, and every later
 change is recorded as a dated amendment.
 
-*Findings: pending the `data-v3` runs.*
+*Findings: pending the `data-v4` runs.*
 
 ## 1. Background
 
@@ -258,15 +258,17 @@ before the data it affects unless it records an outcome:
 - **A8**, made before any run at `data-v2`, adds measures that industry comparisons
   commonly report and the protocol lacked: p99.9 and maximum latency, disk syncs and bytes
   per commit, and CPU time and memory, all descriptive and untested, and the exploratory
-  E1-load sweep. Measurement code changed, not the algorithms, and the runs are made at
-  `data-v3`.
+  E1-load sweep. Measurement code changed, not the algorithms.
+- **A9**, made before any run at `data-v3`, fixes an analysis bug: a comparison without data
+  would have read as significant or as no difference. The code that runs the experiments is
+  unchanged, and every run is made at `data-v4`.
 
 `docs/BUGLOG.md` records every bug found in either algorithm or in shared code, with the
 checker that found it; it is the data for metric M20.
 
 ## 4. Results
 
-*Pending: written from the `data-v3` runs, with every number taken from
+*Pending: written from the `data-v4` runs, with every number taken from
 `docs/RESULTS.md` and the committed results in `experiments/results/`.*
 
 ### 4.1 Validation: checkers, A/A tests, and E2
@@ -363,7 +365,7 @@ checker that found it; it is the data for metric M20.
 
 ## 6. Conclusion
 
-*Pending the `data-v3` runs.*
+*Pending the `data-v4` runs.*
 
 ## References
 

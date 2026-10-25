@@ -456,11 +456,12 @@ results in `docs/RESULTS.md`).
 - [x] The commit used for data collection is tagged `data-v1`. After that, only bug fixes
       are allowed (Section 4.3); a fix is tagged `data-v2`, and so on, and every
       experiment is rerun for both algorithms (Section 5, rule 4). A bug found during
-      data collection is fixed at `data-v2` (`docs/RESEARCH.md` amendment A7), and
-      measurements added before any run at `data-v2` are tagged `data-v3` (amendment A8)
-- [ ] E1–E8 run as specified in `docs/RESEARCH.md` §6 and amendments A3–A8, with the
-      exploratory E1-load (A8), at `data-v3`, after the validation campaign and both A/A
-      tests are rerun (A7). E7 needs `rust-code-analysis-cli`
+      data collection is fixed at `data-v2` (`docs/RESEARCH.md` amendment A7),
+      measurements added before any run at `data-v2` are tagged `data-v3` (amendment A8),
+      and an analysis fix made before any run at `data-v3` is tagged `data-v4` (A9)
+- [ ] E1–E8 run as specified in `docs/RESEARCH.md` §6 and amendments A3–A9, with the
+      exploratory E1-load (A8), at `data-v4` (A9), after the validation campaign and both
+      A/A tests are rerun (A7). E7 needs `rust-code-analysis-cli`
       (`cargo install rust-code-analysis-cli`)
 - [ ] Raw results, configs, and seeds stored in `experiments/`, each experiment's results
       committed before the next run starts

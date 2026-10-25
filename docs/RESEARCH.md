@@ -684,6 +684,23 @@ unchanged.
    amendment A7 lists, and E1-load, is made at `data-v3`, from commits whose code equals
    it, as A7 requires of `data-v2`. No run was made at `data-v2`.
 
+### A9. 2026-10-25: An analysis bug fixed before any run at `data-v3`
+
+**Outcome.** Before any run at `data-v3`, an audit of the analysis code found that a
+comparison without data would have been given a result (`docs/BUGLOG.md`). A missing
+p-value became 0 before the Holm correction, so that comparison read as significant, and
+the Wilcoxon wrapper returned 1 for an empty sample, so it read as no difference.
+
+**Fix.** A comparison without data has no p-value, is left out of the Holm family, and its
+verdict reads "no data". Tests in `analysis/tests` cover the statistical procedures and run
+every analysis script; `cargo xtask ci` and CI run them. The analysis output on the results
+committed so far is unchanged.
+
+**Decision.** By amendment A3.2 the fix is tagged `data-v4`. The code that runs the
+experiments, `crates/`, the experiment commands of `xtask`, `Cargo.lock`, and
+`experiments/configs/`, is the same as at `data-v3`. Every run that amendments A7 and A8
+list is made at `data-v4`, from commits whose code equals it. No run was made at `data-v3`.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

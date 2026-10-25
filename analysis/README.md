@@ -8,6 +8,8 @@ Statistics and figures for the experiments (`docs/PLAN.md` §5 and Phase 6).
 - Dependencies are pinned in `uv.lock`. Run `uv sync` in this folder to create the
   environment.
 - `cargo xtask figures` runs every script below from the repository root.
+- `tests/` checks the statistical procedures and runs every script on the committed results:
+  `uv run pytest` in this folder. `cargo xtask ci` and CI run them.
 
 | Script | Reads | Prints |
 |---|---|---|

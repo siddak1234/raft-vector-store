@@ -26,23 +26,25 @@ pub fn run(root: &Path) -> Result<(), String> {
     }
     println!("==> cargo xtask check-repo");
     crate::check_repo::run(root)?;
-    check_analysis_lock(root)?;
+    check_analysis(root)?;
     println!("All checks passed.");
     Ok(())
 }
 
-/// Checks that `analysis/uv.lock` matches `analysis/pyproject.toml`. Skipped when uv is not
-/// installed, because none of the Rust checks need it.
-fn check_analysis_lock(root: &Path) -> Result<(), String> {
+/// Checks that `analysis/uv.lock` matches `analysis/pyproject.toml`, then runs the analysis
+/// tests. Skipped when uv is not installed, because none of the Rust checks need it.
+fn check_analysis(root: &Path) -> Result<(), String> {
     let has_uv = Command::new("uv")
         .arg("--version")
         .output()
         .is_ok_and(|output| output.status.success());
     if !has_uv {
-        println!("==> skipped the analysis lockfile check: uv is not installed");
+        println!("==> skipped the analysis checks: uv is not installed");
         return Ok(());
     }
-    run_step(&root.join("analysis"), "uv", &["lock", "--check"])
+    let analysis = root.join("analysis");
+    run_step(&analysis, "uv", &["lock", "--check"])?;
+    run_step(&analysis, "uv", &["run", "--locked", "pytest", "-q"])
 }
 
 fn run_step(dir: &Path, program: &str, args: &[&str]) -> Result<(), String> {

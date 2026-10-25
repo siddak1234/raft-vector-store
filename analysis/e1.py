@@ -133,8 +133,11 @@ def verdict(table: pd.DataFrame, label: str) -> bool:
     print(f"\nH1 ({label}): {'SUPPORTED' if passed else 'NOT SUPPORTED'} — "
           f"{int(tested['equivalent'].sum())} of {len(tested)} decision intervals lie within [0.95, 1.05]")
     for _, row in failing.iterrows():
-        print(f"  not equivalent: {row['servers']} servers, {row['network']}, {row['clients']} clients, "
-              f"{row['metric']}: ratio {row['ratio']:.3f} [{row['low']:.3f}, {row['high']:.3f}]")
+        where = f"{row['servers']} servers, {row['network']}, {row['clients']} clients, {row['metric']}"
+        if np.isnan(row["ratio"]):
+            print(f"  no data: {where}")
+        else:
+            print(f"  not equivalent: {where}: ratio {row['ratio']:.3f} [{row['low']:.3f}, {row['high']:.3f}]")
     return passed
 
 

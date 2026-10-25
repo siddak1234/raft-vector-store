@@ -6,6 +6,7 @@ fails (S1: the ratio of medians, Multi-Paxos over Raft, has a 90% bootstrap inte
 two-sided Mann-Whitney U). Every trial also checks C1 and C2.
 """
 
+import math
 import sys
 
 from compare import algorithms, show
@@ -27,14 +28,21 @@ def main() -> int:
     table = algorithms(frame, ["scenario", "servers"], [("recovery_ms", "M21 shard recovery (ms)")], False)
     show("M21: Multi-Paxos against Raft (Mann-Whitney)", table)
     for (scenario, servers), group in frame.groupby(["scenario", "servers"]):
+        if scenario != "S1":
+            continue
         a = group.loc[group["algorithm"] == "raft", "recovery_ms"].dropna().to_numpy(float)
         b = group.loc[group["algorithm"] == "paxos", "recovery_ms"].dropna().to_numpy(float)
+        if len(a) == 0 or len(b) == 0:
+            print(f"  S1, {servers} servers: no data")
+            continue
         ratio, low, high = ratio_of_medians(a, b, paired=False)
-        if scenario == "S1":
-            print(f"  S1, {servers} servers: ratio {ratio:.3f} [{low:.3f}, {high:.3f}] -> "
-                  f"{'equivalent' if equivalent(low, high) else 'not equivalent'}")
+        print(f"  S1, {servers} servers: ratio {ratio:.3f} [{low:.3f}, {high:.3f}] -> "
+              f"{'equivalent' if equivalent(low, high) else 'not equivalent'}")
     s2 = table[table["scenario"] == "S2"]
     for _, row in s2.iterrows():
+        if math.isnan(row["p (Holm)"]):
+            print(f"  S2, {row['servers']} servers: no data")
+            continue
         print(f"  S2, {row['servers']} servers: p (Holm) {row['p (Holm)']:.3g} -> "
               f"{'differs' if row['p (Holm)'] < ALPHA else 'no difference detected'}")
     return 0

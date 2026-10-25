@@ -41,3 +41,6 @@ jobs:
       - name: Check the lockfile
         working-directory: analysis
         run: uv lock --check
+      - name: Run the analysis tests
+        working-directory: analysis
+        run: uv run --locked pytest -q

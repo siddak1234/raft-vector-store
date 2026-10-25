@@ -16,19 +16,20 @@ def paired(frame: pd.DataFrame, column: str, a_mask, b_mask) -> tuple[np.ndarray
 
 def algorithms(frame: pd.DataFrame, keys: list[str], metrics: list[tuple[str, str]], is_paired: bool,
                alternative: str = "two-sided") -> pd.DataFrame:
-    """Multi-Paxos against Raft for each configuration and metric, Holm-corrected."""
+    """Multi-Paxos against Raft for each configuration and metric, Holm-corrected. A
+    configuration without data gets NaN for its p-value and is left out of the correction."""
     rows = []
     for config, group in frame.groupby(keys):
         config = config if isinstance(config, tuple) else (config,)
         for column, name in metrics:
             if is_paired:
                 a, b = paired(group, column, group["algorithm"] == "raft", group["algorithm"] == "paxos")
-                p = wilcoxon(a, b, alternative=alternative) if len(a) else float("nan")
+                p = wilcoxon(a, b, alternative=alternative)
             else:
                 a = group.loc[group["algorithm"] == "raft", column].dropna().to_numpy(float)
                 b = group.loc[group["algorithm"] == "paxos", column].dropna().to_numpy(float)
-                p = mann_whitney(a, b) if len(a) and len(b) else float("nan")
-            ratio, low, high = ratio_of_medians(a, b, paired=is_paired) if len(a) and len(b) else (np.nan,) * 3
+                p = mann_whitney(a, b)
+            ratio, low, high = ratio_of_medians(a, b, paired=is_paired)
             row = dict(zip(keys, config))
             row.update({
                 "metric": name,
@@ -42,7 +43,7 @@ def algorithms(frame: pd.DataFrame, keys: list[str], metrics: list[tuple[str, st
             rows.append(row)
     table = pd.DataFrame(rows)
     if len(table):
-        table["p (Holm)"] = holm([0.0 if np.isnan(p) else p for p in table["p"]])
+        table["p (Holm)"] = holm(table["p"].tolist())
     return table
 
 

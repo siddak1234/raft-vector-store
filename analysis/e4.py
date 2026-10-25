@@ -31,6 +31,8 @@ def main() -> int:
         supported = all(p < ALPHA and pm > rm for p, pm, rm in
                         zip(table["p (Holm)"], table["paxos median"], table["raft median"]))
         print(f"  H3 in E4a: {'SUPPORTED' if supported else 'NOT SUPPORTED'} in every configuration")
+        for _, row in table[table["p (Holm)"].isna()].iterrows():
+            print(f"  no data: {row['servers']} servers, k = {row['uncommitted']}")
     catch = frame[frame["procedure"].isin(["E4b", "E4c"])]
     show("E4b and E4c: M11 catch-up time (ms), two-sided, paired by seed",
          algorithms(catch, ["procedure", "servers", "label"], [("catch_up_ms", "M11 catch-up (ms)")], True))
