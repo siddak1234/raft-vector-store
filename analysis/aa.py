@@ -1,9 +1,10 @@
 """A/A validation (docs/RESEARCH.md §9.2).
 
-Raft is compared with itself on disjoint seeds (arm A: seeds 1-1000, arm B: 1001-2000),
-analyzed as unpaired samples. The harness passes if no Holm-corrected test is significant
-and every E1 ratio of medians is equivalent within the 5% margin. A failure means the
-harness is biased or too noisy to detect real differences.
+Raft is compared with itself on disjoint seeds, analyzed as unpaired samples: in the
+simulator, seeds 1-1000 (arm A) against 1001-2000 (arm B) on E1 and E3; on the real
+cluster, seeds 1-100 against 101-200 on E1 (amendment A4.9). The harness passes if no
+Holm-corrected test is significant and every E1 ratio of medians is equivalent within the
+5% margin. A failure means the harness is biased or too noisy to detect real differences.
 """
 
 import sys
@@ -89,9 +90,24 @@ def main() -> int:
     show("E3 (3 servers, paper-like network, k = 10)", e3_rows)
 
     passed = e1_passed and e3_passed
-    print(f"\nA/A test: {'PASS' if passed else 'FAIL'}")
+    print(f"\nA/A test (simulator): {'PASS' if passed else 'FAIL'}")
     print("  Criteria: no Holm-corrected p below 0.05; every E1 ratio interval within [0.95, 1.05].")
+    real()
     return 0
+
+
+def real() -> None:
+    """The real-cluster part of the A/A test, if it has run."""
+    folder = latest("AA-real")
+    if folder is None:
+        return
+    steady = load(folder, "real-steady.csv")
+    print(f"\nReal-cluster A/A results: {describe(folder)}")
+    print(f"  E1: {len(steady)} trials, {int((~steady['ready']).sum())} not ready")
+    rows, passed = compare(steady[steady["ready"]], STEADY_METRICS, True)
+    show("E1 on the real cluster (3 servers, paper-like network, 16 clients)", rows)
+    print(f"\nA/A test (real cluster): {'PASS' if passed else 'FAIL'}")
+    print("  Criteria: no Holm-corrected p below 0.05; every E1 ratio interval within [0.95, 1.05].")
 
 
 if __name__ == "__main__":

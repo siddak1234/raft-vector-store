@@ -1,0 +1,598 @@
+# E1: steady state (docs/RESEARCH.md §6, H1). Simulator: algorithm x servers {1, 3, 5} x
+# network {LAN-like, paper-like} x clients {1, 4, 16, 64}, 1000 seeds each. Real cluster:
+# servers {3, 5} x both networks x clients {1, 16}, 100 seeds each.
+
+id = "E1"
+description = "Steady-state commit latency, throughput, and cost per commit"
+
+[[run]]
+scenario = "steady"
+label = "1s-lan-1c"
+algorithm = "raft"
+servers = 1
+network = "lan"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-lan-1c"
+algorithm = "paxos"
+servers = 1
+network = "lan"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-lan-4c"
+algorithm = "raft"
+servers = 1
+network = "lan"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-lan-4c"
+algorithm = "paxos"
+servers = 1
+network = "lan"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-lan-16c"
+algorithm = "raft"
+servers = 1
+network = "lan"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-lan-16c"
+algorithm = "paxos"
+servers = 1
+network = "lan"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-lan-64c"
+algorithm = "raft"
+servers = 1
+network = "lan"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-lan-64c"
+algorithm = "paxos"
+servers = 1
+network = "lan"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-lan-1c"
+algorithm = "raft"
+servers = 3
+network = "lan"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-lan-1c"
+algorithm = "paxos"
+servers = 3
+network = "lan"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-lan-4c"
+algorithm = "raft"
+servers = 3
+network = "lan"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-lan-4c"
+algorithm = "paxos"
+servers = 3
+network = "lan"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-lan-16c"
+algorithm = "raft"
+servers = 3
+network = "lan"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-lan-16c"
+algorithm = "paxos"
+servers = 3
+network = "lan"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-lan-64c"
+algorithm = "raft"
+servers = 3
+network = "lan"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-lan-64c"
+algorithm = "paxos"
+servers = 3
+network = "lan"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-lan-1c"
+algorithm = "raft"
+servers = 5
+network = "lan"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-lan-1c"
+algorithm = "paxos"
+servers = 5
+network = "lan"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-lan-4c"
+algorithm = "raft"
+servers = 5
+network = "lan"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-lan-4c"
+algorithm = "paxos"
+servers = 5
+network = "lan"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-lan-16c"
+algorithm = "raft"
+servers = 5
+network = "lan"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-lan-16c"
+algorithm = "paxos"
+servers = 5
+network = "lan"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-lan-64c"
+algorithm = "raft"
+servers = 5
+network = "lan"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-lan-64c"
+algorithm = "paxos"
+servers = 5
+network = "lan"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-paper-1c"
+algorithm = "raft"
+servers = 1
+network = "paper"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-paper-1c"
+algorithm = "paxos"
+servers = 1
+network = "paper"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-paper-4c"
+algorithm = "raft"
+servers = 1
+network = "paper"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-paper-4c"
+algorithm = "paxos"
+servers = 1
+network = "paper"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-paper-16c"
+algorithm = "raft"
+servers = 1
+network = "paper"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-paper-16c"
+algorithm = "paxos"
+servers = 1
+network = "paper"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-paper-64c"
+algorithm = "raft"
+servers = 1
+network = "paper"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "1s-paper-64c"
+algorithm = "paxos"
+servers = 1
+network = "paper"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-paper-1c"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-paper-1c"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-paper-4c"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-paper-4c"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-paper-16c"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-paper-16c"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-paper-64c"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "3s-paper-64c"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-paper-1c"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-paper-1c"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 1
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-paper-4c"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-paper-4c"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-paper-16c"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-paper-16c"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-paper-64c"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "5s-paper-64c"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 64
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-3s-lan-1c"
+algorithm = "raft"
+servers = 3
+network = "lan"
+clients = 1
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-3s-lan-1c"
+algorithm = "paxos"
+servers = 3
+network = "lan"
+clients = 1
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-3s-lan-16c"
+algorithm = "raft"
+servers = 3
+network = "lan"
+clients = 16
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-3s-lan-16c"
+algorithm = "paxos"
+servers = 3
+network = "lan"
+clients = 16
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-5s-lan-1c"
+algorithm = "raft"
+servers = 5
+network = "lan"
+clients = 1
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-5s-lan-1c"
+algorithm = "paxos"
+servers = 5
+network = "lan"
+clients = 1
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-5s-lan-16c"
+algorithm = "raft"
+servers = 5
+network = "lan"
+clients = 16
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-5s-lan-16c"
+algorithm = "paxos"
+servers = 5
+network = "lan"
+clients = 16
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-3s-paper-1c"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 1
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-3s-paper-1c"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 1
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-3s-paper-16c"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 16
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-3s-paper-16c"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 16
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-5s-paper-1c"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 1
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-5s-paper-1c"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 1
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-5s-paper-16c"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 16
+seeds = [1, 100]
+
+[[run]]
+scenario = "steady"
+environment = "real"
+label = "real-5s-paper-16c"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 16
+seeds = [1, 100]

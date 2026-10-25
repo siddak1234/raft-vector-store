@@ -20,6 +20,8 @@ Commands:
                      for one algorithm (--algorithm raft or paxos; default raft)
   experiment ID      Run experiments/configs/ID.toml and write results
   figures            Regenerate every analysis table and figure from the latest results
+  complexity         Run experiment E7 (needs rust-code-analysis-cli)
+  demo [OPTS]        A live failover demonstration (--consensus raft|paxos)
   dataset NAME       Download an ANN-Benchmarks dataset (glove-25 or sift) and check it
   dataplane [OPTS]   Run the Phase 4 data-plane checks on real processes
                      (--algorithm raft|paxos, --scratch DIR)
@@ -49,6 +51,12 @@ fn main() -> ExitCode {
         [command] if command == "figures" => experiments::figures(&root),
         [command, rest @ ..] if command == "cluster" => experiments::cluster(&root, rest),
         [command, name] if command == "dataset" => experiments::dataset(name),
+        [command, rest @ ..] if command == "complexity" => {
+            experiments::bench_command(&root, "complexity", rest)
+        }
+        [command, rest @ ..] if command == "demo" => {
+            experiments::bench_command(&root, "demo", rest)
+        }
         [command, rest @ ..] if command == "dataplane" => experiments::dataplane(&root, rest),
         [] => {
             print!("{HELP}");

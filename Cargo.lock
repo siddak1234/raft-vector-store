@@ -208,6 +208,7 @@ dependencies = [
  "postcard",
  "raft",
  "rpc",
+ "rustix",
  "serde",
  "serde_json",
  "tokio",

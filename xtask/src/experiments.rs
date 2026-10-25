@@ -5,7 +5,18 @@ use std::process::Command;
 
 /// Analysis scripts in `analysis/`, run by `figures` in this order. A script whose results
 /// do not exist yet reports that and is skipped.
-const ANALYSES: &[&str] = &["validation.py", "aa.py", "e2.py"];
+const ANALYSES: &[&str] = &[
+    "validation.py",
+    "aa.py",
+    "e1.py",
+    "e2.py",
+    "e3.py",
+    "e4.py",
+    "e5.py",
+    "e6.py",
+    "e7.py",
+    "e8.py",
+];
 
 /// Runs the validation campaign in release mode.
 pub fn validate(root: &Path, options: &[String]) -> Result<(), String> {
@@ -31,6 +42,13 @@ pub fn experiment(root: &Path, id: &str, options: &[String]) -> Result<(), Strin
 /// Starts a local cluster for demos and manual tests.
 pub fn cluster(root: &Path, options: &[String]) -> Result<(), String> {
     let mut args = vec!["cluster".to_string()];
+    args.extend_from_slice(options);
+    run_bench(root, &args)
+}
+
+/// Runs a runner command, such as `complexity` or `demo`.
+pub fn bench_command(root: &Path, command: &str, options: &[String]) -> Result<(), String> {
+    let mut args = vec![command.to_string()];
     args.extend_from_slice(options);
     run_bench(root, &args)
 }

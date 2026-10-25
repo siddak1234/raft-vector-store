@@ -30,9 +30,10 @@ use rpc::{
 
 use crate::checks;
 use crate::cluster::{binary_dir, fresh_dir};
+use crate::config::RunConfig;
 use crate::results::{self, Row};
 
-const COLLECTION: &str = "vectors";
+pub(crate) const COLLECTION: &str = "vectors";
 
 /// One check's result.
 #[derive(Debug, Clone)]
@@ -172,27 +173,66 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// A running cluster of 3 control-plane servers and 4 data nodes.
-struct Env {
-    cluster: LocalCluster,
-    servers: Vec<(u64, String)>,
+/// A running cluster of control-plane servers and 4 data nodes.
+pub(crate) struct Env {
+    pub(crate) cluster: LocalCluster,
+    pub(crate) servers: Vec<(u64, String)>,
+    /// Mean one-way delay injected on control-plane traffic, in microseconds.
+    delay_us: u64,
 }
 
 impl Env {
-    async fn start(algorithm: Algorithm, label: &str) -> Result<Env, String> {
+    /// 3 control-plane servers with no injected delay, and 4 data nodes.
+    pub(crate) async fn start(algorithm: Algorithm, label: &str) -> Result<Env, String> {
+        Self::launch(algorithm, label, 3, 0, None).await
+    }
+
+    /// The control plane of an experiment run (its size, network, and seed), and 4 data
+    /// nodes.
+    pub(crate) async fn start_with(run: &RunConfig, seed: u64) -> Result<Env, String> {
+        let algorithm = match crate::algorithm::Kind::parse(&run.algorithm)? {
+            crate::algorithm::Kind::Raft => Algorithm::Raft,
+            crate::algorithm::Kind::Paxos => Algorithm::Paxos,
+        };
+        let delay_us = run.network().one_way_delay().as_micros() as u64;
+        Self::launch(
+            algorithm,
+            "vectors",
+            run.servers as u64,
+            delay_us,
+            Some(seed),
+        )
+        .await
+    }
+
+    async fn launch(
+        algorithm: Algorithm,
+        label: &str,
+        servers: u64,
+        delay_us: u64,
+        seed: Option<u64>,
+    ) -> Result<Env, String> {
         let bins = binary_dir()?;
         let options = LocalOptions {
             algorithm,
             election_timeout_ms: (150, 300),
-            delay_us: 0,
+            delay_us,
             record: true,
-            seed: None,
+            seed,
         };
-        let mut cluster =
-            LocalCluster::start(&bins.join("controlplane"), &fresh_dir(label), 3, options)?;
+        let mut cluster = LocalCluster::start(
+            &bins.join("controlplane"),
+            &fresh_dir(label),
+            servers,
+            options,
+        )?;
         cluster.start_data_nodes(&bins.join("datanode"), 4)?;
         let servers = cluster.servers().to_vec();
-        let env = Env { cluster, servers };
+        let env = Env {
+            cluster,
+            servers,
+            delay_us,
+        };
         // Wait until every data node is registered and alive.
         let mut control = env.control(1)?;
         let deadline = Instant::now() + Duration::from_secs(20);
@@ -214,22 +254,23 @@ impl Env {
         }
     }
 
-    fn control(&self, id: u64) -> Result<ControlClient, String> {
+    pub(crate) fn control(&self, id: u64) -> Result<ControlClient, String> {
         let policy = RetryPolicy {
             give_up: Some(Duration::from_secs(30)),
+            delay_us: self.delay_us,
             ..RetryPolicy::default()
         };
         ControlClient::new(&self.servers, policy, rpc::now_micros() ^ id)
     }
 
-    async fn map(&self) -> Result<ShardMap, String> {
+    pub(crate) async fn map(&self) -> Result<ShardMap, String> {
         self.control(7)?
             .shard_map(true)
             .await
             .map_err(|err| err.to_string())
     }
 
-    fn data_client(
+    pub(crate) fn data_client(
         &self,
         address: &str,
     ) -> Result<DataNodeClient<tonic::transport::Channel>, String> {
@@ -238,16 +279,108 @@ impl Env {
         Ok(DataNodeClient::new(endpoint.connect_lazy()))
     }
 
-    fn data_address(&self, node: u64) -> Option<String> {
+    pub(crate) fn data_address(&self, node: u64) -> Option<String> {
         self.cluster
             .data_nodes()
             .iter()
             .find(|(id, _)| *id == node)
             .map(|(_, a)| a.clone())
     }
+
+    /// The control-plane server leading the highest term, with the term.
+    pub(crate) async fn leader_and_term(&self) -> Option<(u64, u64)> {
+        let mut best: Option<(u64, u64)> = None;
+        for (id, _) in &self.servers {
+            if !self.cluster.is_running(*id) {
+                continue;
+            }
+            let mut raw = self.control(10).ok()?.server(*id)?;
+            if let Ok(Ok(status)) =
+                tokio::time::timeout(Duration::from_millis(300), raw.status(Empty {})).await
+            {
+                let status = status.into_inner();
+                if status.role == "leader" && best.is_none_or(|(_, t)| status.term > t) {
+                    best = Some((status.id, status.term));
+                }
+            }
+        }
+        best
+    }
+
+    /// The control-plane leader.
+    pub(crate) async fn leader(&self) -> Option<u64> {
+        self.leader_and_term().await.map(|(id, _)| id)
+    }
+
+    /// Runs C2 over every in-sync replica of the current map and C1 over the logs of every
+    /// data node still running. `acknowledged` are the clients' acknowledged writes, and
+    /// IDs `0..preload` were loaded before them. Returns the C2 violations, the C1
+    /// violations, the number of served requests checked, and the number of writes
+    /// expected.
+    pub(crate) async fn check(
+        &self,
+        acknowledged: &[Ack],
+        preload: usize,
+    ) -> Result<(Vec<String>, Vec<String>, usize, usize), String> {
+        let map = self.map().await?;
+        let mut expected: BTreeMap<ShardKey, BTreeSet<u64>> = BTreeMap::new();
+        for id in 0..preload as u64 {
+            expected
+                .entry(ShardKey {
+                    collection: COLLECTION.into(),
+                    shard: shard_of(id, 4),
+                })
+                .or_default()
+                .insert(id);
+        }
+        for (shard, id, _, _) in acknowledged {
+            expected.entry(shard.clone()).or_default().insert(*id);
+        }
+        let mut held = BTreeMap::new();
+        let mut in_sync = BTreeMap::new();
+        for (key, info) in &map.shards {
+            in_sync.insert(
+                key.clone(),
+                info.in_sync.iter().map(|n| n.0).collect::<Vec<_>>(),
+            );
+            for node in &info.in_sync {
+                let Some(address) = self.data_address(node.0) else {
+                    continue;
+                };
+                let mut client = self.data_client(&address)?;
+                let request = InspectRequest {
+                    shard: rpc::encode(key),
+                };
+                if let Ok(Ok(reply)) =
+                    tokio::time::timeout(Duration::from_secs(5), client.inspect(request)).await
+                {
+                    let dump: ShardDump = rpc::decode(&reply.into_inner().dump)?;
+                    held.insert(
+                        (key.clone(), node.0),
+                        dump.ids.into_iter().collect::<BTreeSet<u64>>(),
+                    );
+                }
+            }
+        }
+        let lost = checks::no_lost_writes(&expected, &held, &in_sync);
+        let mut logs: Vec<DataNodeEvents> = Vec::new();
+        for (_, address) in self.cluster.data_nodes().to_vec() {
+            let mut client = self.data_client(&address)?;
+            if let Ok(Ok(reply)) =
+                tokio::time::timeout(Duration::from_secs(2), client.events(Empty {})).await
+                && let Ok(events) = rpc::decode::<DataNodeEvents>(&reply.into_inner().events)
+            {
+                logs.push(events);
+            }
+        }
+        let doubled = checks::single_primary(&logs);
+        let serves = logs.iter().map(|l| l.serves.len()).sum();
+        let total = expected.values().map(BTreeSet::len).sum();
+        Ok((lost, doubled, serves, total))
+    }
 }
 
-async fn create(env: &Env, dimension: u32, metric: Metric) -> Result<(), String> {
+pub(crate) async fn create(env: &Env, dimension: u32, metric: Metric) -> Result<(), String> {
     let command = ControlCommand::CreateCollection {
         name: COLLECTION.into(),
         spec: CollectionSpec {
@@ -273,7 +406,7 @@ async fn create(env: &Env, dimension: u32, metric: Metric) -> Result<(), String>
 }
 
 /// Upserts training vectors `0..count` with 64 concurrent writers.
-async fn load(env: &Env, dataset: &Arc<Dataset>, count: usize) -> Result<(), String> {
+pub(crate) async fn load(env: &Env, dataset: &Arc<Dataset>, count: usize) -> Result<(), String> {
     let next = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let mut tasks = Vec::new();
     for worker in 0..64 {
@@ -364,16 +497,16 @@ enum Fault {
 
 /// An acknowledged write: its shard, vector ID, when the acknowledgment arrived, and the
 /// epoch it was acknowledged at.
-type Ack = (ShardKey, u64, Instant, rpc::Epoch);
+pub(crate) type Ack = (ShardKey, u64, Instant, rpc::Epoch);
 
 /// Clients that upsert new vectors continuously and record every acknowledged write.
-struct Writers {
+pub(crate) struct Writers {
     stop: Arc<AtomicBool>,
     acknowledged: Arc<Mutex<Vec<Ack>>>,
     tasks: Vec<tokio::task::JoinHandle<()>>,
 }
 
-fn start_writers(
+pub(crate) fn start_writers(
     env: &Env,
     clients: u64,
     dimension: usize,
@@ -421,7 +554,29 @@ fn start_writers(
 }
 
 impl Writers {
-    async fn stop(self) -> Vec<Ack> {
+    /// Writes acknowledged so far.
+    pub(crate) fn count(&self) -> usize {
+        self.acknowledged.lock().expect("no task panicked").len()
+    }
+
+    /// How long after `after` the first write to `shard` was acknowledged at an epoch newer
+    /// than `epoch`, if one has been.
+    pub(crate) fn first_ack_after(
+        &self,
+        shard: &ShardKey,
+        after: Instant,
+        epoch: rpc::Epoch,
+    ) -> Option<Duration> {
+        self.acknowledged
+            .lock()
+            .expect("no task panicked")
+            .iter()
+            .filter(|(s, _, at, e)| s == shard && *at > after && *e > epoch)
+            .map(|(_, _, at, _)| at.duration_since(after))
+            .min()
+    }
+
+    pub(crate) async fn stop(self) -> Vec<Ack> {
         self.stop.store(true, Ordering::Relaxed);
         for task in self.tasks {
             let _ = task.await;
@@ -444,19 +599,6 @@ async fn set_control_faults(env: &Env, id: u64, drop: Vec<u64>) -> Result<(), St
         .await
         .map_err(|err| err.to_string())?;
     Ok(())
-}
-
-async fn leader(env: &Env) -> Option<u64> {
-    for (id, _) in &env.servers {
-        let mut raw = env.control(10).ok()?.server(*id)?;
-        if let Ok(Ok(status)) =
-            tokio::time::timeout(Duration::from_millis(300), raw.status(Empty {})).await
-            && status.into_inner().role == "leader"
-        {
-            return Some(*id);
-        }
-    }
-    None
 }
 
 async fn fault_test(
@@ -499,7 +641,7 @@ async fn fault_test(
         }
         Fault::PartitionLeader => {
             test = "control-plane leader partition";
-            let old = leader(&env).await.ok_or("no leader")?;
+            let old = env.leader().await.ok_or("no leader")?;
             let others: Vec<u64> = env
                 .servers
                 .iter()
@@ -576,62 +718,8 @@ async fn fault_test(
         .values()
         .all(|info| info.in_sync.len() == 3 && info.replicas.len() == 3);
 
-    // C2: every acknowledged write is on every in-sync replica.
-    let mut expected: BTreeMap<ShardKey, BTreeSet<u64>> = BTreeMap::new();
-    for id in 0..preload as u64 {
-        expected
-            .entry(ShardKey {
-                collection: COLLECTION.into(),
-                shard: shard_of(id, 4),
-            })
-            .or_default()
-            .insert(id);
-    }
-    for (shard, id, _, _) in &acknowledged {
-        expected.entry(shard.clone()).or_default().insert(*id);
-    }
-    let mut held = BTreeMap::new();
-    let mut in_sync = BTreeMap::new();
-    for (key, info) in &map.shards {
-        in_sync.insert(
-            key.clone(),
-            info.in_sync.iter().map(|n| n.0).collect::<Vec<_>>(),
-        );
-        for node in &info.in_sync {
-            let Some(address) = env.data_address(node.0) else {
-                continue;
-            };
-            let mut client = env.data_client(&address)?;
-            let reply = client
-                .inspect(InspectRequest {
-                    shard: rpc::encode(key),
-                })
-                .await
-                .map_err(|err| err.to_string())?;
-            let dump: ShardDump = rpc::decode(&reply.into_inner().dump)?;
-            held.insert(
-                (key.clone(), node.0),
-                dump.ids.into_iter().collect::<BTreeSet<u64>>(),
-            );
-        }
-    }
-    let lost = checks::no_lost_writes(&expected, &held, &in_sync);
-
-    // C1: at most one serving primary, from every data node still running.
-    let mut logs: Vec<DataNodeEvents> = Vec::new();
-    for (id, address) in env.cluster.data_nodes().to_vec() {
-        let mut client = env.data_client(&address)?;
-        if let Ok(Ok(reply)) =
-            tokio::time::timeout(Duration::from_secs(2), client.events(Empty {})).await
-            && let Ok(events) = rpc::decode::<DataNodeEvents>(&reply.into_inner().events)
-        {
-            logs.push(events);
-        } else if id != primary || fault != Fault::KillPrimary {
-            return Err(format!("data node {id} did not return its log"));
-        }
-    }
-    let doubled = checks::single_primary(&logs);
-    let serves: usize = logs.iter().map(|l| l.serves.len()).sum();
+    // C2 on every in-sync replica, and C1 over every data node still running.
+    let (lost, doubled, serves, expected) = env.check(&acknowledged, preload).await?;
     env.cluster.stop();
 
     let writes = acknowledged.len();
@@ -664,10 +752,7 @@ async fn fault_test(
             },
             passed: lost.is_empty(),
             detail: if lost.is_empty() {
-                format!(
-                    "{} acknowledged writes found on every in-sync replica",
-                    expected.values().map(BTreeSet::len).sum::<usize>()
-                )
+                format!("{expected} acknowledged writes found on every in-sync replica")
             } else {
                 lost.join("; ")
             },

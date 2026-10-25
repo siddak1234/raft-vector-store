@@ -22,6 +22,10 @@ Usage:
       Runs every trial in an experiment config (experiments/configs/*.toml).
   bench dataplane [--algorithm NAME] [--scratch DIR]
       Runs the Phase 4 exit checks on real processes (docs/PLAN.md §8).
+  bench complexity [--scratch DIR]
+      Runs experiment E7: protocol size and code complexity (docs/RESEARCH.md §6).
+  bench demo [--consensus raft|paxos]
+      A live failover demonstration on a local cluster.
   bench cluster [1|3|5] [--consensus raft|paxos] [--delay-us D] [--data-nodes M]
       Starts a local cluster and stops it when Enter is pressed.
 
@@ -92,6 +96,12 @@ fn run(args: &[String]) -> Result<(), String> {
     }
     if command == "dataplane" {
         return bench::dataplane::run(rest);
+    }
+    if command == "complexity" {
+        return bench::complexity::run(rest);
+    }
+    if command == "demo" {
+        return bench::demo::run(rest);
     }
     let options = parse(rest)?;
     match command.as_str() {

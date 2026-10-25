@@ -55,6 +55,15 @@ pub struct RunConfig {
     /// Commands the leader appends just before it crashes (failover scenario only).
     #[serde(default)]
     pub uncommitted: usize,
+    /// Commands the leader commits while a follower is away (catch-up scenario only).
+    #[serde(default)]
+    pub committed: usize,
+    /// How the follower is separated (catch-up scenario only).
+    #[serde(default)]
+    pub catch_up: Option<crate::scenarios::recovery::CatchUp>,
+    /// Whether the control-plane leader crashes with the primary (vectors scenario only).
+    #[serde(default)]
+    pub crash_leader: bool,
     /// The partition scenario (partition scenario only).
     #[serde(default)]
     pub partition: Option<crate::scenarios::partition::PartitionKind>,
@@ -95,8 +104,14 @@ pub enum Scenario {
     Figure16,
     /// E3: failover after a leader crash with uncommitted entries.
     Failover,
+    /// E4a: log recovery after consecutive crashes.
+    Recovery,
+    /// E4b and E4c: catch-up of a follower that missed committed entries.
+    CatchUp,
     /// E5: partitions.
     Partition,
+    /// E8: vector store recovery (real cluster only).
+    Vectors,
     /// E6: exhaustive model checking of reachable states.
     Modelcheck,
 }
@@ -173,6 +188,18 @@ pub fn load(path: &std::path::Path) -> Result<ExperimentConfig, String> {
             if run.network.is_none() {
                 return Err(format!("run {}: the run needs a network", run.label));
             }
+        }
+        if run.scenario == Scenario::CatchUp && (run.catch_up.is_none() || run.committed == 0) {
+            return Err(format!(
+                "run {}: a catch-up run needs `catch_up` and `committed`",
+                run.label
+            ));
+        }
+        if run.scenario == Scenario::Vectors && run.environment != Environment::Real {
+            return Err(format!(
+                "run {}: the vectors scenario runs on the real cluster",
+                run.label
+            ));
         }
         if run.scenario == Scenario::Partition && run.partition.is_none() {
             return Err(format!(

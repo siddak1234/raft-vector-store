@@ -24,10 +24,32 @@ enum Record {
     Truncate { from: u64 },
 }
 
+/// How [`Storage::sync`] makes writes durable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FsyncMode {
+    /// `File::sync_data`, which on macOS issues `F_FULLFSYNC` and flushes the drive's cache.
+    Full,
+    /// `fsync(2)`: the data reaches the drive, which may keep it in its cache. Enough for a
+    /// process crash, the only fault the experiments inject.
+    Plain,
+}
+
+impl FsyncMode {
+    /// The mode named by the `RVS_FSYNC` environment variable (`full` or `plain`); `full`
+    /// if it is unset.
+    pub fn from_env() -> FsyncMode {
+        match std::env::var("RVS_FSYNC").as_deref() {
+            Ok("plain") => FsyncMode::Plain,
+            _ => FsyncMode::Full,
+        }
+    }
+}
+
 /// Durable storage in one append-only file.
 #[derive(Debug)]
 pub struct FileStorage {
     file: File,
+    mode: FsyncMode,
     hard: HardState,
     log: BTreeMap<LogIndex, Entry>,
     /// Encoded records not yet written to the file.
@@ -54,6 +76,7 @@ impl FileStorage {
         file.read_to_end(&mut bytes)?;
         let mut storage = FileStorage {
             file,
+            mode: FsyncMode::from_env(),
             hard: HardState::default(),
             log: BTreeMap::new(),
             pending: Vec::new(),
@@ -171,7 +194,10 @@ impl Storage for FileStorage {
         let result = self
             .file
             .write_all(&self.pending)
-            .and_then(|()| self.file.sync_data());
+            .and_then(|()| match self.mode {
+                FsyncMode::Full => self.file.sync_data(),
+                FsyncMode::Plain => rustix::fs::fsync(&self.file).map_err(io::Error::from),
+            });
         // The driver contract: storage that cannot write must panic, and the server then
         // restarts from what was synced.
         result.expect("cannot write the storage file");

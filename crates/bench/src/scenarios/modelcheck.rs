@@ -77,6 +77,32 @@ impl Row for ModelcheckRow {
     }
 }
 
+impl ModelcheckRow {
+    /// Whether the search ended before its budget and state cap.
+    pub fn complete(&self) -> bool {
+        self.complete
+    }
+}
+
+/// The row of a rung skipped because a smaller rung did not complete.
+pub fn skipped(run: &RunConfig) -> ModelcheckRow {
+    ModelcheckRow {
+        run: run_columns(run),
+        max_commands: run.max_commands.unwrap_or(0),
+        max_elections: run.max_elections.unwrap_or(0),
+        max_heartbeats: run.max_heartbeats.unwrap_or(0),
+        complete: false,
+        states: 0,
+        search_states: 0,
+        generated: 0,
+        max_depth: 0,
+        seconds: 0.0,
+        election_safety: true,
+        state_machine_safety: true,
+        command_committed: false,
+    }
+}
+
 /// Runs one search with every CPU core.
 pub fn search<A: Checkable>(run: &RunConfig) -> ModelcheckRow {
     let bounds = Bounds {

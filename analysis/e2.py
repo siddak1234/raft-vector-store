@@ -11,7 +11,8 @@ are shown alongside ours; they are not expected to match exactly, because the ne
 implementation differ.
 
 If the exploratory E2-lan results exist (docs/RESEARCH.md amendment A2), their medians are
-printed after the pre-registered results, clearly labeled.
+printed after the pre-registered results, clearly labeled. The real-cluster run at
+150-300 ms (amendment A1.6) is summarized next to the simulator's run at that range.
 """
 
 import sys
@@ -105,7 +106,39 @@ def main() -> int:
                   "Time to replace a crashed leader (5 servers, ~15 ms round trip)")
     print(f"\nFigure: {figure}")
     exploratory()
+    real(frame)
     return 0
+
+
+def real(simulated: pd.DataFrame) -> None:
+    """Summarize the real-cluster E2 run against the simulator's 150-300 ms range."""
+    folder = latest("E2-real")
+    if folder is None:
+        return
+    frame = load(folder, "real-figure16.csv")
+    not_ready = int((~frame["ready"]).sum())
+    frame = frame[frame["ready"]]
+    times = frame["time_without_leader_ms"]
+    sim = simulated.loc[simulated["label"] == "150-300", "time_without_leader_ms"]
+    print(f"\nReal cluster, 150-300 ms ({describe(folder)}): {len(frame)} ready trials, "
+          f"{not_ready} not ready, {int(frame['censored'].sum())} censored")
+    print(f"  median {times.median():.1f} ms, mean {times.mean():.1f}, p99 {times.quantile(0.99):.1f}, "
+          f"max {times.max():.1f}; rounds (median) {frame['election_rounds'].median():.0f}")
+    print(f"  simulator at 150-300 ms: median {sim.median():.1f} ms, mean {sim.mean():.1f}, "
+          f"p99 {sim.quantile(0.99):.1f}, max {sim.max():.1f}")
+    figure, axis = plt.subplots(figsize=(7, 3.5))
+    for values, label in [(sim, "simulator"), (times, "real cluster")]:
+        values = np.sort(values.dropna())
+        axis.step(values, np.arange(1, len(values) + 1) / len(values) * 100, where="post", label=label)
+    axis.set_xlabel("time without leader (ms)")
+    axis.set_ylabel("cumulative percent")
+    axis.set_title("E2 at 150-300 ms: simulator and real cluster")
+    axis.legend()
+    figure.tight_layout()
+    path = figure_path("E2_real.png")
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    print(f"  figure: {path}")
 
 
 def exploratory() -> None:

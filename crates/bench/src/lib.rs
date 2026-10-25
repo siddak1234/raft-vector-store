@@ -11,9 +11,12 @@
 pub mod algorithm;
 pub mod checks;
 pub mod cluster;
+pub mod complexity;
 pub mod config;
 pub mod dataplane;
+pub mod demo;
 pub mod real;
 pub mod results;
 pub mod runner;
 pub mod scenarios;
+pub mod vectors;

@@ -1,0 +1,24 @@
+# The Phase 2 check of the model-checking adapter (docs/RESEARCH.md amendment A5.5): the
+# smallest rung of E6's ladder, for both algorithms. The reported E6 runs at the
+# data-collection tag.
+
+id = "E6-check"
+description = "Phase 2 check of the model-checking adapter"
+
+[[run]]
+scenario = "modelcheck"
+label = "c0-e1-h0"
+algorithm = "raft"
+servers = 3
+max_commands = 0
+max_elections = 1
+max_heartbeats = 0
+
+[[run]]
+scenario = "modelcheck"
+label = "c0-e1-h0"
+algorithm = "paxos"
+servers = 3
+max_commands = 0
+max_elections = 1
+max_heartbeats = 0

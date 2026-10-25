@@ -1,0 +1,230 @@
+# E5: partitions (docs/RESEARCH.md §6, H2b; details in amendment A5). Paper-like network,
+# 150-300 ms timeouts, 4 clients. Simulator: P1-P5 at the sizes of §6, 1000 seeds.
+# Real cluster: P1 and P3 with 5 servers, 100 seeds.
+
+id = "E5"
+description = "Unavailability and unnecessary leader changes under partitions"
+
+[[run]]
+scenario = "partition"
+label = "P1-3s"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+partition = "p1"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P1-3s"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+partition = "p1"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P1-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p1"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P1-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p1"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P2-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p2"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P2-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p2"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P3-3s"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+partition = "p3"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P3-3s"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+partition = "p3"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P3-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p3"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P3-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p3"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P4-3s"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+partition = "p4"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P4-3s"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+partition = "p4"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P4-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p4"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P4-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p4"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P5-3s"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+partition = "p5"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P5-3s"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+partition = "p5"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P5-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p5"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+label = "P5-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p5"
+seeds = [1, 1000]
+
+[[run]]
+scenario = "partition"
+environment = "real"
+label = "real-P1-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p1"
+seeds = [1, 100]
+
+[[run]]
+scenario = "partition"
+environment = "real"
+label = "real-P1-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p1"
+seeds = [1, 100]
+
+[[run]]
+scenario = "partition"
+environment = "real"
+label = "real-P3-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p3"
+seeds = [1, 100]
+
+[[run]]
+scenario = "partition"
+environment = "real"
+label = "real-P3-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+partition = "p3"
+seeds = [1, 100]

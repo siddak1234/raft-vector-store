@@ -330,17 +330,22 @@ impl<C: Inspect> Driver<C> {
             .lock()
             .expect("no thread panicked")
             .drop_entries_to = drop_entries_to.into_iter().collect();
+        // The commands are appended in one step with one sync, as in the simulator, where
+        // they take no time. Every output is still carried out only after the sync that
+        // covers it. One sync per command would stall the leader for `commands` flushes,
+        // long enough for its followers to start an election before the crash.
         let client = rpc::now_micros();
+        let mut outputs = Vec::new();
         for seq in 1..=u64::from(commands) {
             let command = Command(rpc::encode(&bench_request(client, seq)));
-            if let Ok(outputs) = self.node.propose(&mut self.storage, command) {
-                self.finish(outputs);
+            if let Ok(more) = self.node.propose(&mut self.storage, command) {
+                outputs.extend(more);
             }
         }
         if heartbeat {
-            let outputs = self.node.on_timer(&mut self.storage, Timer::Heartbeat);
-            self.finish(outputs);
+            outputs.extend(self.node.on_timer(&mut self.storage, Timer::Heartbeat));
         }
+        self.finish(outputs);
         let time = rpc::now_micros();
         let term = self.node.status().term.0;
         self.log.write(&serde_json::json!({

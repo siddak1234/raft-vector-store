@@ -7,6 +7,7 @@ pub mod failover;
 pub mod figure16;
 pub mod modelcheck;
 pub mod partition;
+pub mod recovery;
 pub mod steady;
 pub mod validation;
 
@@ -86,15 +87,41 @@ pub fn run_experiment(
         .collect();
     if !searches.is_empty() {
         let mut rows = Vec::new();
+        // A rung is skipped if a smaller rung did not complete for both algorithms
+        // (docs/RESEARCH.md amendment A5.4).
+        let mut incomplete: Vec<(u8, u8, u8)> = Vec::new();
+        let bounds = |run: &RunConfig| {
+            (
+                run.max_commands.unwrap_or(0),
+                run.max_elections.unwrap_or(0),
+                run.max_heartbeats.unwrap_or(0),
+            )
+        };
         for run in searches {
+            let rung = bounds(run);
+            if incomplete.iter().any(|small| {
+                *small != rung && small.0 <= rung.0 && small.1 <= rung.1 && small.2 <= rung.2
+            }) {
+                eprintln!(
+                    "modelcheck {}: {} skipped, a smaller rung did not complete",
+                    run.label, run.algorithm
+                );
+                rows.push(modelcheck::skipped(run));
+                results::write_csv(output, "modelcheck.csv", &rows)?;
+                continue;
+            }
             eprintln!(
                 "modelcheck {}: {} (commands {:?}, elections {:?}, heartbeats {:?})",
                 run.label, run.algorithm, run.max_commands, run.max_elections, run.max_heartbeats
             );
-            rows.push(match kind(run) {
+            let row = match kind(run) {
                 Kind::Raft => modelcheck::search::<Raft>(run),
                 Kind::Paxos => modelcheck::search::<Paxos>(run),
-            });
+            };
+            if !row.complete() && !incomplete.contains(&rung) {
+                incomplete.push(rung);
+            }
+            rows.push(row);
             // Rows are written after each search, so a long run keeps what it finished.
             results::write_csv(output, "modelcheck.csv", &rows)?;
         }
@@ -108,6 +135,33 @@ pub fn run_experiment(
             Kind::Paxos => failover::trial::<Paxos>(run, *seed),
         });
         results::write_csv(output, "failover.csv", &rows)?;
+        trials += rows.len();
+    }
+    let recovery_jobs: Vec<(&RunConfig, u64)> = jobs(Scenario::Recovery)
+        .into_iter()
+        .chain(jobs(Scenario::CatchUp))
+        .collect();
+    if !recovery_jobs.is_empty() {
+        eprintln!("recovery: {} trials", recovery_jobs.len());
+        let rows = run_parallel(&recovery_jobs, 500, |(run, seed)| {
+            match (run.scenario, kind(run)) {
+                (Scenario::Recovery, Kind::Raft) => recovery::consecutive::<Raft>(run, *seed),
+                (Scenario::Recovery, Kind::Paxos) => recovery::consecutive::<Paxos>(run, *seed),
+                (_, Kind::Raft) => recovery::catch_up::<Raft>(
+                    run,
+                    *seed,
+                    run.catch_up.expect("checked"),
+                    run.committed,
+                ),
+                (_, Kind::Paxos) => recovery::catch_up::<Paxos>(
+                    run,
+                    *seed,
+                    run.catch_up.expect("checked"),
+                    run.committed,
+                ),
+            }
+        });
+        results::write_csv(output, "recovery.csv", &rows)?;
         trials += rows.len();
     }
     let partition = jobs(Scenario::Partition);
@@ -169,6 +223,18 @@ fn run_real(
     let mut figure16_rows = Vec::new();
     let mut failover_rows = Vec::new();
     let mut partition_rows = Vec::new();
+    let mut vector_rows = Vec::new();
+    let dataset = if jobs
+        .iter()
+        .any(|(_, run, _)| run.scenario == Scenario::Vectors)
+    {
+        let path = crate::dataplane::dataset_dir().join("glove-25-angular.hdf5");
+        Some(std::sync::Arc::new(client::Dataset::load(&path).map_err(
+            |err| format!("{err}; run `cargo xtask dataset glove-25`"),
+        )?))
+    } else {
+        None
+    };
     for (done, (order, run, seed)) in jobs.into_iter().enumerate() {
         if done % 10 == 0 {
             eprintln!("  real cluster: {done} / {total} trials");
@@ -199,9 +265,16 @@ fn run_real(
                     runtime.block_on(crate::real::partition(run, seed, kind)),
                 ));
             }
-            Scenario::Modelcheck => {
+            Scenario::Vectors => {
+                let dataset = dataset.as_ref().expect("loaded above");
+                vector_rows.push((
+                    order,
+                    runtime.block_on(crate::vectors::trial(run, seed, run.crash_leader, dataset)),
+                ));
+            }
+            Scenario::Modelcheck | Scenario::Recovery | Scenario::CatchUp => {
                 return Err(format!(
-                    "run {}: model checking has no real cluster",
+                    "run {}: this scenario has no real-cluster version",
                     run.label
                 ));
             }
@@ -231,6 +304,11 @@ fn run_real(
         let rows = sorted(partition_rows);
         trials += rows.len();
         results::write_csv(output, "real-partition.csv", &rows)?;
+    }
+    if !vector_rows.is_empty() {
+        let rows = sorted(vector_rows);
+        trials += rows.len();
+        results::write_csv(output, "real-vectors.csv", &rows)?;
     }
     Ok(trials)
 }
@@ -350,7 +428,7 @@ pub(crate) fn run_columns(run: &RunConfig) -> String {
 
 const RUN_HEADER: &str = "label,arm,algorithm,servers,network,clients,election_timeout_min_ms,election_timeout_max_ms,uncommitted";
 
-fn optional(value: Option<f64>) -> String {
+pub(crate) fn optional(value: Option<f64>) -> String {
     value.map(results::number).unwrap_or_default()
 }
 
