@@ -1,6 +1,7 @@
 //! The algorithms the runner can simulate, and their algorithm-specific measurements.
 
 use consensus::{Consensus, NodeId, Storage};
+use paxos::Paxos;
 use raft::{Message, Raft};
 use sim::{Observer, ServerView, SimTime};
 
@@ -79,5 +80,71 @@ impl Algorithm for Raft {
 
     fn reset(observer: &mut StaleVotes) {
         observer.count = 0;
+    }
+}
+
+impl Algorithm for Paxos {
+    const NAME: &'static str = "paxos";
+    const RAFT_CHECKS: bool = false;
+    type Observer = ();
+
+    fn stale_log_rejections(_observer: &()) -> Option<u64> {
+        None
+    }
+
+    fn reset(_observer: &mut ()) {}
+}
+
+/// The algorithms the runner can simulate, chosen by name in configs and on the command
+/// line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    /// [`Raft`].
+    Raft,
+    /// [`Paxos`].
+    Paxos,
+}
+
+impl Kind {
+    /// Every algorithm.
+    pub const ALL: [Kind; 2] = [Kind::Raft, Kind::Paxos];
+
+    /// The algorithm's name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Kind::Raft => Raft::NAME,
+            Kind::Paxos => Paxos::NAME,
+        }
+    }
+
+    /// Finds an algorithm by name.
+    ///
+    /// # Errors
+    ///
+    /// Returns a description listing the known names if `name` is not one of them.
+    pub fn parse(name: &str) -> Result<Kind, String> {
+        Kind::ALL
+            .into_iter()
+            .find(|kind| kind.name() == name)
+            .ok_or_else(|| {
+                let known: Vec<&str> = Kind::ALL.iter().map(|kind| kind.name()).collect();
+                format!(
+                    "unknown algorithm `{name}` (available: {})",
+                    known.join(", ")
+                )
+            })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Kind;
+
+    #[test]
+    fn parses_every_name() {
+        for kind in Kind::ALL {
+            assert_eq!(Kind::parse(kind.name()), Ok(kind));
+        }
+        assert!(Kind::parse("zab").is_err());
     }
 }

@@ -114,6 +114,8 @@ pub fn write(output: &Output, name: &str, text: &str) -> Result<(), String> {
 }
 
 /// Writes `manifest.toml`: what was run, from which commit, when, and on what machine.
+/// `algorithm` names the algorithm when the whole run used one, as the validation campaign
+/// does; experiment configs name it per run instead.
 ///
 /// # Errors
 ///
@@ -122,6 +124,7 @@ pub fn write_manifest(
     output: &Output,
     experiment: &str,
     config: Option<&str>,
+    algorithm: Option<&str>,
     trials: usize,
 ) -> Result<(), String> {
     let (finished, _) = utc_now();
@@ -129,6 +132,9 @@ pub fn write_manifest(
     let _ = writeln!(text, "experiment = {}", quote(experiment));
     if let Some(config) = config {
         let _ = writeln!(text, "config = {}", quote(config));
+    }
+    if let Some(algorithm) = algorithm {
+        let _ = writeln!(text, "algorithm = {}", quote(algorithm));
     }
     let _ = writeln!(text, "commit = {}", quote(&output.commit));
     let _ = writeln!(text, "started = {}", quote(&output.started));

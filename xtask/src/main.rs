@@ -16,12 +16,14 @@ Usage: cargo xtask <command> [options]
 Commands:
   check-repo         Check the repository layout, file rules, and crate dependency rules
   ci                 Run every check that CI runs: format, lint, test, check-repo, lockfiles
-  validate [OPTS]    Run the validation campaign: seeds 1-10000 with random faults
+  validate [OPTS]    Run the validation campaign: seeds 1-10000 with random faults,
+                     for one algorithm (--algorithm raft or paxos; default raft)
   experiment ID      Run experiments/configs/ID.toml and write results
   figures            Regenerate every analysis table and figure from the latest results
   help               Show this message
 
 Options for validate and experiment (passed to the experiment runner):
+  --algorithm NAME   Validation: the algorithm to check, raft or paxos (default raft).
   --seeds N          Validation: number of seeds. Experiment: at most N seeds per run.
   --scratch DIR      Write results to DIR instead of experiments/results/; allowed with
                      uncommitted changes, for trying things out.

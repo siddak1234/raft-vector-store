@@ -31,6 +31,7 @@ const CHECK_EVERY: Duration = Duration::from_secs(5);
 /// One validation seed.
 #[derive(Debug, Clone)]
 pub struct ValidationRow {
+    algorithm: &'static str,
     seed: u64,
     servers: usize,
     faults: usize,
@@ -46,12 +47,13 @@ pub struct ValidationRow {
 
 impl Row for ValidationRow {
     fn header() -> &'static str {
-        "seed,servers,faults,events,replies,max_term,violations,first_violation"
+        "algorithm,seed,servers,faults,events,replies,max_term,violations,first_violation"
     }
 
     fn line(&self) -> String {
         format!(
-            "{},{},{},{},{},{},{},\"{}\"",
+            "{},{},{},{},{},{},{},{},\"{}\"",
+            self.algorithm,
             self.seed,
             self.servers,
             self.faults,
@@ -136,6 +138,7 @@ pub fn trial<A: Algorithm>(seed: u64) -> ValidationRow {
         .map(|v| format!("{} at {}: {}", v.check.name(), v.time, v.detail))
         .unwrap_or_default();
     ValidationRow {
+        algorithm: A::NAME,
         seed,
         servers,
         faults,

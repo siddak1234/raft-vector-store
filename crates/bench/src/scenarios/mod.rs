@@ -12,10 +12,11 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use consensus::{Config, Consensus, NodeId, Rng, Role, Storage, Term};
+use paxos::Paxos;
 use raft::Raft;
 use sim::{Observer, SimConfig, Simulation};
 
-use crate::algorithm::Algorithm;
+use crate::algorithm::{Algorithm, Kind};
 use crate::config::{ExperimentConfig, RunConfig, Scenario};
 use crate::results::{self, Output};
 use crate::runner::run_parallel;
@@ -39,14 +40,7 @@ pub fn run_experiment(
     seed_limit: Option<u64>,
 ) -> Result<usize, String> {
     for run in &config.run {
-        if run.algorithm != Raft::NAME {
-            return Err(format!(
-                "run {}: unknown algorithm `{}` (available: {})",
-                run.label,
-                run.algorithm,
-                Raft::NAME
-            ));
-        }
+        Kind::parse(&run.algorithm).map_err(|err| format!("run {}: {err}", run.label))?;
     }
     let jobs = |scenario: Scenario| -> Vec<(&RunConfig, u64)> {
         config
@@ -65,8 +59,9 @@ pub fn run_experiment(
     let steady = jobs(Scenario::Steady);
     if !steady.is_empty() {
         eprintln!("steady: {} trials", steady.len());
-        let rows = run_parallel(&steady, 500, |(run, seed)| {
-            steady::trial::<Raft>(run, *seed)
+        let rows = run_parallel(&steady, 500, |(run, seed)| match kind(run) {
+            Kind::Raft => steady::trial::<Raft>(run, *seed),
+            Kind::Paxos => steady::trial::<Paxos>(run, *seed),
         });
         results::write_csv(output, "steady.csv", &rows)?;
         trials += rows.len();
@@ -74,8 +69,9 @@ pub fn run_experiment(
     let figure16 = jobs(Scenario::Figure16);
     if !figure16.is_empty() {
         eprintln!("figure16: {} trials", figure16.len());
-        let rows = run_parallel(&figure16, 1000, |(run, seed)| {
-            figure16::trial::<Raft>(run, *seed)
+        let rows = run_parallel(&figure16, 1000, |(run, seed)| match kind(run) {
+            Kind::Raft => figure16::trial::<Raft>(run, *seed),
+            Kind::Paxos => figure16::trial::<Paxos>(run, *seed),
         });
         results::write_csv(output, "figure16.csv", &rows)?;
         trials += rows.len();
@@ -83,13 +79,19 @@ pub fn run_experiment(
     let failover = jobs(Scenario::Failover);
     if !failover.is_empty() {
         eprintln!("failover: {} trials", failover.len());
-        let rows = run_parallel(&failover, 500, |(run, seed)| {
-            failover::trial::<Raft>(run, *seed)
+        let rows = run_parallel(&failover, 500, |(run, seed)| match kind(run) {
+            Kind::Raft => failover::trial::<Raft>(run, *seed),
+            Kind::Paxos => failover::trial::<Paxos>(run, *seed),
         });
         results::write_csv(output, "failover.csv", &rows)?;
         trials += rows.len();
     }
     Ok(trials)
+}
+
+/// The algorithm a run names, which `run_experiment` has already checked.
+fn kind(run: &RunConfig) -> Kind {
+    Kind::parse(&run.algorithm).expect("algorithms are checked before any trial runs")
 }
 
 /// Simulator settings for a run. The heartbeat interval is half the minimum election
