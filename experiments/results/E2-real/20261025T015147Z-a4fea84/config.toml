@@ -1,0 +1,15 @@
+# E2 on the real cluster (docs/RESEARCH.md §6 and amendment A1.6): the Figure 16 procedure
+# with 5 servers on the paper-like network and 150-300 ms election timeouts, 100 trials.
+
+id = "E2-real"
+description = "Time to replace a crashed leader on the real cluster, 150-300 ms"
+
+[[run]]
+scenario = "figure16"
+environment = "real"
+label = "150-300"
+algorithm = "raft"
+servers = 5
+network = "paper"
+election_timeout_ms = [150, 300]
+seeds = [1, 100]
