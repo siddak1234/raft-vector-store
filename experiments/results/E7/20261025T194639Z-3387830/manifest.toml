@@ -1,0 +1,13 @@
+experiment = "E7"
+commit = "33878304106ab79d5634c451b93775b9237d3a7c"
+started = "2026-10-25T19:46:39Z"
+finished = "2026-10-25T19:46:40Z"
+trials = 9
+official = true
+
+[machine]
+os = "macos"
+arch = "aarch64"
+cpu = "Apple M1 Pro"
+logical_cpus = 8
+rustc = "rustc 1.99.1 (58cf8f9c3 2026-10-13)"

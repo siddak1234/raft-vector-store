@@ -1,0 +1,28 @@
+{
+  "paxos": {
+    "message_types": [
+      "Prepare",
+      "Promise",
+      "Accept",
+      "Accepted",
+      "Commit"
+    ],
+    "persistent_fields": [
+      "currentTerm",
+      "log"
+    ]
+  },
+  "raft": {
+    "message_types": [
+      "RequestVote",
+      "RequestVoteReply",
+      "AppendEntries",
+      "AppendEntriesReply"
+    ],
+    "persistent_fields": [
+      "currentTerm",
+      "votedFor",
+      "log"
+    ]
+  }
+}
