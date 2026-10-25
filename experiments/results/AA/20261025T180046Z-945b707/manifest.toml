@@ -1,0 +1,14 @@
+experiment = "AA"
+config = "experiments/configs/AA.toml"
+commit = "945b7072423e1f3d466b0af032ee29d875e39208"
+started = "2026-10-25T18:00:46Z"
+finished = "2026-10-25T18:01:09Z"
+trials = 4000
+official = true
+
+[machine]
+os = "macos"
+arch = "aarch64"
+cpu = "Apple M1 Pro"
+logical_cpus = 8
+rustc = "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
