@@ -34,13 +34,13 @@ impl Paxos {
         }
     }
 
-    /// Sends `peer` an `Accept` carrying up to `max_entries_per_message` entries.
+    /// Sends `peer` `Accept` messages, each carrying up to `max_entries_per_message` entries.
     ///
-    /// - A heartbeat starts at the oldest entry the follower has not accepted, so a lost
-    ///   message is repaired. With nothing to send, the `Accept` is empty.
-    /// - Otherwise it starts at the first entry never sent, and no more than
-    ///   `max_entries_in_flight` entries are unacknowledged. With nothing to send, no
-    ///   message goes out.
+    /// - A heartbeat sends one, starting at the oldest entry the follower has not accepted,
+    ///   so a lost message is repaired. With nothing to send, the `Accept` is empty.
+    /// - Otherwise they start at the first entry never sent and go out until
+    ///   `max_entries_in_flight` entries are unacknowledged or none are left to send. With
+    ///   nothing to send, no message goes out.
     fn send_accept<S: Storage>(
         &mut self,
         storage: &mut S,
@@ -48,6 +48,18 @@ impl Paxos {
         heartbeat: bool,
         out: &mut Outputs,
     ) {
+        while self.send_one_accept(storage, peer, heartbeat, out) {}
+    }
+
+    /// Sends `peer` one `Accept` as [`Paxos::send_accept`] describes. Returns whether it sent
+    /// new entries, in which case more may follow.
+    fn send_one_accept<S: Storage>(
+        &mut self,
+        storage: &mut S,
+        peer: NodeId,
+        heartbeat: bool,
+        out: &mut Outputs,
+    ) -> bool {
         let last = storage.last_index();
         let batch = self.config.max_entries_per_message as u64;
         let limit = self.config.max_entries_in_flight as u64;
@@ -64,7 +76,7 @@ impl Paxos {
             let room = limit.saturating_sub(in_flight);
             let count = (last.0 + 1).saturating_sub(first.0).min(batch).min(room);
             if count == 0 {
-                return;
+                return false;
             }
             (first, count)
         };
@@ -88,6 +100,7 @@ impl Paxos {
                 round: self.round,
             },
         });
+        !heartbeat
     }
 
     /// Handles `Accept` (spec §5, "Followers" rule 3). Each index is written on its own,

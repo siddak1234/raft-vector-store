@@ -362,3 +362,28 @@ fn a_single_server_elects_itself_and_commits_at_once() {
         .expect("the only server leads");
     assert_eq!(applied(&outputs), [LogIndex(2)]);
 }
+
+#[test]
+fn a_reply_lets_the_leader_send_up_to_the_in_flight_limit() {
+    // Server 1 holds 200 entries it never learned were chosen.
+    let held: Vec<(u64, Entry)> = (1..=200).map(|i| (i, entry(1, i as u8))).collect();
+    let mut log = storage(0, &held);
+    let mut leader = elect_server_1(&mut log, Vec::new());
+    assert_eq!(log.last_index(), LogIndex(201));
+
+    // Once server 2 accepts the first message, the leader sends the rest of the 200
+    // re-proposed entries and its no-op at once, in messages of at most 64 entries.
+    let outputs = leader.step(&mut log, NodeId(2), accepted(1, 64, 0, 1));
+    let batches: Vec<(u64, usize)> = sent(&outputs)
+        .into_iter()
+        .filter_map(|(to, message)| match message {
+            Message::Accept {
+                first_index,
+                entries,
+                ..
+            } if to == NodeId(2) => Some((first_index.0, entries.len())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(batches, [(65, 64), (129, 64), (193, 9)]);
+}

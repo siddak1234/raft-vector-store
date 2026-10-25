@@ -28,13 +28,14 @@ impl Raft {
         }
     }
 
-    /// Sends `peer` an `AppendEntries` that starts at its `next_index`, carrying up to
-    /// `max_entries_per_message` entries.
+    /// Sends `peer` `AppendEntries` messages that start at its `next_index`, each carrying up
+    /// to `max_entries_per_message` entries.
     ///
     /// - While probing, at most one message is unanswered. A heartbeat resends the probe,
     ///   which repairs a lost message.
-    /// - While replicating, `next_index` advances past the entries sent, and no more than
-    ///   `max_entries_in_flight` entries are unacknowledged.
+    /// - While replicating, `next_index` advances past the entries sent, and messages go out
+    ///   until `max_entries_in_flight` entries are unacknowledged or none are left to send
+    ///   (amendment A1.4).
     ///
     /// When there are no entries to send, a message goes out only if `heartbeat` is set.
     pub(crate) fn send_append<S: Storage>(
@@ -44,6 +45,21 @@ impl Raft {
         heartbeat: bool,
         out: &mut Outputs,
     ) {
+        let mut heartbeat = heartbeat;
+        while self.send_one_append(storage, peer, heartbeat, out) {
+            heartbeat = false;
+        }
+    }
+
+    /// Sends `peer` one `AppendEntries` as [`Raft::send_append`] describes. Returns whether
+    /// it sent entries while replicating, in which case more may follow.
+    fn send_one_append<S: Storage>(
+        &mut self,
+        storage: &mut S,
+        peer: NodeId,
+        heartbeat: bool,
+        out: &mut Outputs,
+    ) -> bool {
         let last = storage.last_index();
         let progress = self
             .followers
@@ -54,7 +70,7 @@ impl Raft {
         let count = match progress.flow {
             Flow::Probe { waiting } => {
                 if waiting && !heartbeat {
-                    return;
+                    return false;
                 }
                 progress.flow = Flow::Probe { waiting: true };
                 available.min(batch)
@@ -67,7 +83,7 @@ impl Raft {
                 let room = (self.config.max_entries_in_flight as u64).saturating_sub(in_flight);
                 let count = available.min(batch).min(room);
                 if count == 0 && !heartbeat {
-                    return;
+                    return false;
                 }
                 count
             }
@@ -84,7 +100,8 @@ impl Raft {
                     .clone()
             })
             .collect();
-        if progress.flow == Flow::Replicate {
+        let replicating = progress.flow == Flow::Replicate;
+        if replicating {
             progress.next_index = LogIndex(progress.next_index.0 + count);
         }
 
@@ -99,6 +116,7 @@ impl Raft {
                 round: self.round,
             },
         });
+        replicating && count > 0
     }
 
     /// Handles `AppendEntries` (Figure 2, receiver implementation).

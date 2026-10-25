@@ -139,7 +139,8 @@ campaign rerun on seeds 1–10,000. These scratch runs were not committed.
 
 No bug was found in the Multi-Paxos implementation: it passed every check on its first
 run, so `docs/BUGLOG.md` has no Multi-Paxos entry. Details the specification left open are
-recorded as its amendment A2.
+recorded as its amendment A2. (This held through Phase 4. Data collection later found a
+replication bug in both algorithms; see `docs/BUGLOG.md`, 2026-10-25.)
 
 ### Model checking
 

@@ -209,3 +209,47 @@ fn a_single_server_elects_itself_and_commits_at_once() {
         }
     )));
 }
+
+#[test]
+fn a_reply_lets_the_leader_send_up_to_the_in_flight_limit() {
+    let mut log = storage(1, &[]);
+    let mut leader = start(1, &mut log);
+    leader.on_timer(&mut log, Timer::Election);
+    let granted = Message::RequestVoteReply {
+        term: Term(2),
+        granted: true,
+    };
+    leader.step(&mut log, NodeId(2), granted);
+    assert_eq!(leader.status().role, Role::Leader);
+
+    // Commands arrive while the leader still probes server 2, so none is sent to it yet.
+    for byte in 0..200 {
+        let outputs = leader
+            .propose(&mut log, Command(vec![byte]))
+            .expect("server 1 leads");
+        assert!(sent(&outputs).iter().all(|(to, _)| *to != NodeId(2)));
+    }
+
+    // Once server 2 answers the probe, the leader sends all 200 commands at once, in
+    // messages of at most 64 entries (amendment A1.4).
+    let ack = Message::AppendEntriesReply {
+        term: Term(2),
+        success: true,
+        prev_log_index: LogIndex::ZERO,
+        index: LogIndex(1),
+        round: 1,
+    };
+    let outputs = leader.step(&mut log, NodeId(2), ack);
+    let batches: Vec<(u64, usize)> = sent(&outputs)
+        .into_iter()
+        .filter_map(|(to, message)| match message {
+            Message::AppendEntries {
+                prev_log_index,
+                entries,
+                ..
+            } if to == NodeId(2) => Some((prev_log_index.0, entries.len())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(batches, [(1, 64), (65, 64), (129, 64), (193, 8)]);
+}
