@@ -1,0 +1,14 @@
+experiment = "E2-real"
+config = "experiments/configs/E2-real.toml"
+commit = "4033616094ef10c0cafbe41d2acc747f126e0713"
+started = "2026-10-25T05:10:53Z"
+finished = "2026-10-25T05:11:58Z"
+trials = 100
+official = true
+
+[machine]
+os = "macos"
+arch = "aarch64"
+cpu = "Apple M1 Pro"
+logical_cpus = 8
+rustc = "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
