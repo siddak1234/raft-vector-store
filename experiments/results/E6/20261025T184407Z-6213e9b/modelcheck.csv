@@ -1,0 +1,17 @@
+label,arm,algorithm,servers,network,clients,election_timeout_min_ms,election_timeout_max_ms,uncommitted,max_commands,max_elections,max_heartbeats,complete,states,search_states,generated,max_depth,seconds,election_safety,state_machine_safety,command_committed
+c0-e1-h0,,raft,3,,0,150,300,0,0,1,0,true,37125265,37389340,219455251,32,130.4082,true,true,false
+c0-e1-h0,,paxos,3,,0,150,300,0,0,1,0,true,35753384,36494539,226623590,28,139.8276,true,true,false
+c0-e1-h1,,raft,3,,0,150,300,0,0,1,1,false,140560578,152568501,1200054459,36,756.4845,true,true,false
+c0-e1-h1,,paxos,3,,0,150,300,0,0,1,1,false,126650931,150452616,1200052215,36,746.6173,true,true,false
+c1-e1-h0,,raft,3,,0,150,300,0,1,1,0,false,185188016,193905851,1200046093,36,1121.5851,true,true,true
+c1-e1-h0,,paxos,3,,0,150,300,0,1,1,0,false,157968830,165996811,1200044875,37,855.6451,true,true,true
+c1-e1-h1,,raft,3,,0,150,300,0,1,1,1,false,0,0,0,0,0.0000,true,true,false
+c1-e1-h1,,paxos,3,,0,150,300,0,1,1,1,false,0,0,0,0,0.0000,true,true,false
+c2-e1-h1,,raft,3,,0,150,300,0,2,1,1,false,0,0,0,0,0.0000,true,true,false
+c2-e1-h1,,paxos,3,,0,150,300,0,2,1,1,false,0,0,0,0,0.0000,true,true,false
+c1-e2-h1,,raft,3,,0,150,300,0,1,2,1,false,0,0,0,0,0.0000,true,true,false
+c1-e2-h1,,paxos,3,,0,150,300,0,1,2,1,false,0,0,0,0,0.0000,true,true,false
+c2-e2-h1,,raft,3,,0,150,300,0,2,2,1,false,0,0,0,0,0.0000,true,true,false
+c2-e2-h1,,paxos,3,,0,150,300,0,2,2,1,false,0,0,0,0,0.0000,true,true,false
+c2-e2-h2,,raft,3,,0,150,300,0,2,2,2,false,0,0,0,0,0.0000,true,true,false
+c2-e2-h2,,paxos,3,,0,150,300,0,2,2,2,false,0,0,0,0,0.0000,true,true,false

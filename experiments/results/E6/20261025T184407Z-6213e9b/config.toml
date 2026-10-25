@@ -1,0 +1,150 @@
+# E6: coherency by exhaustive model checking (docs/RESEARCH.md §6, H4), at the ladder of
+# bounds in amendment A5: (commands, elections per server, heartbeats per server), 3
+# servers. A rung is skipped if a smaller rung did not complete for both algorithms.
+
+id = "E6"
+description = "Reachable states under exhaustive model checking"
+
+[[run]]
+scenario = "modelcheck"
+label = "c0-e1-h0"
+algorithm = "raft"
+servers = 3
+max_commands = 0
+max_elections = 1
+max_heartbeats = 0
+
+[[run]]
+scenario = "modelcheck"
+label = "c0-e1-h0"
+algorithm = "paxos"
+servers = 3
+max_commands = 0
+max_elections = 1
+max_heartbeats = 0
+
+[[run]]
+scenario = "modelcheck"
+label = "c0-e1-h1"
+algorithm = "raft"
+servers = 3
+max_commands = 0
+max_elections = 1
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c0-e1-h1"
+algorithm = "paxos"
+servers = 3
+max_commands = 0
+max_elections = 1
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c1-e1-h0"
+algorithm = "raft"
+servers = 3
+max_commands = 1
+max_elections = 1
+max_heartbeats = 0
+
+[[run]]
+scenario = "modelcheck"
+label = "c1-e1-h0"
+algorithm = "paxos"
+servers = 3
+max_commands = 1
+max_elections = 1
+max_heartbeats = 0
+
+[[run]]
+scenario = "modelcheck"
+label = "c1-e1-h1"
+algorithm = "raft"
+servers = 3
+max_commands = 1
+max_elections = 1
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c1-e1-h1"
+algorithm = "paxos"
+servers = 3
+max_commands = 1
+max_elections = 1
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c2-e1-h1"
+algorithm = "raft"
+servers = 3
+max_commands = 2
+max_elections = 1
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c2-e1-h1"
+algorithm = "paxos"
+servers = 3
+max_commands = 2
+max_elections = 1
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c1-e2-h1"
+algorithm = "raft"
+servers = 3
+max_commands = 1
+max_elections = 2
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c1-e2-h1"
+algorithm = "paxos"
+servers = 3
+max_commands = 1
+max_elections = 2
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c2-e2-h1"
+algorithm = "raft"
+servers = 3
+max_commands = 2
+max_elections = 2
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c2-e2-h1"
+algorithm = "paxos"
+servers = 3
+max_commands = 2
+max_elections = 2
+max_heartbeats = 1
+
+[[run]]
+scenario = "modelcheck"
+label = "c2-e2-h2"
+algorithm = "raft"
+servers = 3
+max_commands = 2
+max_elections = 2
+max_heartbeats = 2
+
+[[run]]
+scenario = "modelcheck"
+label = "c2-e2-h2"
+algorithm = "paxos"
+servers = 3
+max_commands = 2
+max_elections = 2
+max_heartbeats = 2
