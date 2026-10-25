@@ -5,7 +5,7 @@ paginate: true
 ---
 
 <!-- Status: the results slides (marked "Pending") are filled in from the Phase 5 runs at
-data-v2 (docs/RESEARCH.md amendment A7). Every other slide is complete. -->
+data-v3 (docs/RESEARCH.md amendments A7 and A8). Every other slide is complete. -->
 
 # Raft vs. Multi-Paxos on a Vector Store Control Plane
 
@@ -102,6 +102,7 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 | | What | Where |
 |---|---|---|
 | E1 | Steady state: latency, throughput, cost per commit | sim + real |
+| E1-load | Latency against offered load (exploratory) | real |
 | E2 | Raft's Figure 16 (validation) | sim + real |
 | E3 | Leader crash with `k` uncommitted entries | sim + real |
 | E4 | Consecutive crashes; follower catch-up | sim |
@@ -126,7 +127,7 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 
 ## Results: validation
 
-*Pending: checkers, A/A tests, and E2 at `data-v2`.*
+*Pending: checkers, A/A tests, and E2 at `data-v3`.*
 
 ---
 

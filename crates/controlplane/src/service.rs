@@ -1,6 +1,7 @@
 //! The control-plane gRPC API: proposals, shard-map reads, status, fault injection, and the
 //! measurement log.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
@@ -16,6 +17,27 @@ use crate::driver::{Confirmed, Input, Proposed, Shared, role_name};
 use crate::leases::Leases;
 use crate::transport::Faults;
 
+/// The CPU time this process has used, user plus system, in microseconds, and its peak
+/// resident memory in bytes; zeros if the system does not report them.
+fn process_usage() -> (u64, u64) {
+    use nix::sys::resource::{UsageWho, getrusage};
+    let Ok(usage) = getrusage(UsageWho::RUSAGE_SELF) else {
+        return (0, 0);
+    };
+    let micros = |t: nix::sys::time::TimeVal| {
+        u64::try_from(t.tv_sec()).unwrap_or(0) * 1_000_000 + u64::try_from(t.tv_usec()).unwrap_or(0)
+    };
+    let cpu = micros(usage.user_time()) + micros(usage.system_time());
+    // macOS reports `ru_maxrss` in bytes, Linux in kilobytes.
+    let rss = u64::try_from(usage.max_rss()).unwrap_or(0);
+    let rss = if cfg!(target_os = "macos") {
+        rss
+    } else {
+        rss * 1024
+    };
+    (cpu, rss)
+}
+
 /// The `ControlPlane` service of one server.
 pub struct ControlPlaneService {
     id: u64,
@@ -23,6 +45,7 @@ pub struct ControlPlaneService {
     shared: Arc<Mutex<Shared>>,
     faults: Arc<Mutex<Faults>>,
     leases: Arc<Leases>,
+    delay_cpu_us: Arc<AtomicU64>,
 }
 
 impl ControlPlaneService {
@@ -33,6 +56,7 @@ impl ControlPlaneService {
         shared: Arc<Mutex<Shared>>,
         faults: Arc<Mutex<Faults>>,
         leases: Arc<Leases>,
+        delay_cpu_us: Arc<AtomicU64>,
     ) -> Self {
         ControlPlaneService {
             id,
@@ -40,6 +64,7 @@ impl ControlPlaneService {
             shared,
             faults,
             leases,
+            delay_cpu_us,
         }
     }
 
@@ -115,6 +140,7 @@ impl ControlPlane for ControlPlaneService {
     }
 
     async fn status(&self, _: Request<Empty>) -> Result<Response<StatusReply>, Status> {
+        let (cpu_us, max_rss_bytes) = process_usage();
         let shared = self.shared.lock().expect("no thread panicked");
         Ok(Response::new(StatusReply {
             id: self.id,
@@ -123,6 +149,11 @@ impl ControlPlane for ControlPlaneService {
             leader: shared.leader.map_or(0, |l| l.0),
             commit_index: shared.commit_index,
             applied_index: shared.applied_index,
+            fsyncs: shared.fsyncs,
+            storage_bytes: shared.storage_bytes,
+            cpu_us,
+            max_rss_bytes,
+            delay_cpu_us: self.delay_cpu_us.load(Ordering::Relaxed),
         }))
     }
 

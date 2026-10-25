@@ -35,6 +35,10 @@ pub struct RetryPolicy {
     pub delay_us: u64,
     /// Give up after this long, if set.
     pub give_up: Option<Duration>,
+    /// Whether each injected delay ends with a short spin, for precision
+    /// (`docs/RESEARCH.md` amendment A4.3). An open-loop load turns it off, so that
+    /// thousands of commands in flight do not take CPU from the servers (amendment A8).
+    pub precise_delay: bool,
 }
 
 impl Default for RetryPolicy {
@@ -44,6 +48,7 @@ impl Default for RetryPolicy {
             backoff: Duration::from_millis(50),
             delay_us: 0,
             give_up: None,
+            precise_delay: true,
         }
     }
 }
@@ -128,12 +133,30 @@ impl ControlClient {
         self.id
     }
 
-    /// A raw gRPC client for server `id`, for status, faults, and measurement calls.
+    /// A client with its own session `id` that shares this client's connections and
+    /// starts at the server this one would try next. The control plane expects one command
+    /// at a time per session, so concurrent commands each need a session of their own.
+    pub fn session(&self, id: u64) -> ControlClient {
+        ControlClient {
+            servers: self.servers.clone(),
+            id,
+            seq: 0,
+            target: self.target,
+            jitter: Jitter::new(id),
+            policy: self.policy,
+        }
+    }
+
+    /// A raw gRPC client for server `id`, for status, faults, and measurement calls. It
+    /// accepts replies of any size: a server's measurement log, which lists every message it
+    /// sent, outgrows gRPC's default 4 MB limit at a few thousand commits per second.
     pub fn server(&self, id: u64) -> Option<ControlPlaneClient<Channel>> {
         self.servers
             .iter()
             .find(|(server, _)| *server == id)
-            .map(|(_, channel)| ControlPlaneClient::new(channel.clone()))
+            .map(|(_, channel)| {
+                ControlPlaneClient::new(channel.clone()).max_decoding_message_size(usize::MAX)
+            })
     }
 
     /// Proposes `command` and waits until it is committed and applied.
@@ -255,6 +278,10 @@ impl ControlClient {
             return;
         }
         let deadline = Instant::now() + self.jitter.delay(self.policy.delay_us);
-        let _ = tokio::task::spawn_blocking(move || sleep_until(deadline)).await;
+        if self.policy.precise_delay {
+            let _ = tokio::task::spawn_blocking(move || sleep_until(deadline)).await;
+        } else {
+            tokio::time::sleep_until(deadline.into()).await;
+        }
     }
 }

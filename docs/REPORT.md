@@ -4,8 +4,8 @@
 **Siddak Bhatia (sb56878), Harrison Held (HWH492)**
 
 > **Status:** sections 1–3, 5, and the references are complete. Section 4 (results) and
-> section 6 (conclusion) are written from the Phase 5 runs at `data-v2`
-> (`docs/RESEARCH.md` amendment A7), which have not been made yet.
+> section 6 (conclusion) are written from the Phase 5 runs at `data-v3`
+> (`docs/RESEARCH.md` amendments A7 and A8), which have not been made yet.
 
 ## Abstract
 
@@ -20,7 +20,7 @@ to consider. The research questions, metrics, experiments, sample sizes, and sta
 tests were fixed in a research protocol before any data was collected, and every later
 change is recorded as a dated amendment.
 
-*Findings: pending the `data-v2` runs.*
+*Findings: pending the `data-v3` runs.*
 
 ## 1. Background
 
@@ -207,7 +207,8 @@ are dated amendments (§3.5). The comparison rules (`docs/PLAN.md` §5):
 
 | ID | Question | Procedure | Configurations | Trials | Metrics |
 |---|---|---|---|---|---|
-| E1 | RQ1 | Closed-loop clients with a stable leader; 2 s warm-up discarded, 10 s measured | Servers {1, 3, 5} × network {LAN, paper} × clients {1, 4, 16, 64} | 1,000 sim; 100 real for 3 and 5 servers × both networks × 1 and 16 clients | Commit latency (median, p99), throughput, messages and bytes per commit |
+| E1 | RQ1 | Closed-loop clients with a stable leader; 2 s warm-up discarded, 10 s measured | Servers {1, 3, 5} × network {LAN, paper} × clients {1, 4, 16, 64} | 1,000 sim; 100 real for 3 and 5 servers × both networks × 1 and 16 clients | Commit latency (median, p99), throughput, messages and bytes per commit. Descriptive (A8): p99.9 and maximum latency, fsyncs and bytes synced per commit, and on the real cluster CPU time per commit and peak memory |
+| E1-load | RQ1, exploratory | Commands sent at a fixed rate whatever the replies (open loop); latency runs from when each command was due | 3 and 5 servers × the offered rates of A8, paper-like network | 30 real | Throughput, latency percentiles, late commands, the E1 costs, CPU time, and memory |
 | E2 | Validation | Raft only: the leader delivers one command to a random subset, then crashes at a random point of a heartbeat interval | 5 servers, 10 timeout ranges from 12–24 to 150–300 ms | 1,000 sim per range; 100 real at 150–300 ms | Time without a leader |
 | E3 | RQ2, RQ3 | 4 clients; a client proposes `k` commands that reach a random subset of followers, then the leader crashes | Servers {3, 5} × k {0, 10, 100, 1000} | 1,000 sim; 100 real for k {0, 100} | Time without a leader, unavailability, election rounds and traffic, re-sent entries, log gaps, entries toward a leader, discarded entries |
 | E4 | RQ3 | E4a: two consecutive crashes with `k` uncommitted entries each. E4b: a follower restarts after `n` commits. E4c: a partitioned follower reconnects after `n` commits | E4a: k {10, 100}; E4b and E4c: n {100, 1000}; servers {3, 5} | 1,000 sim | Re-sent entries by the third leader (E4a), catch-up time (E4b, E4c) |
@@ -252,15 +253,20 @@ before the data it affects unless it records an outcome:
   reply, a leader sent at most one message of up to 64 entries, so a backlog moved one
   batch per round trip instead of up to the in-flight limit. Raft took about 16 round trips
   to catch a follower up on 1,000 entries. Both leaders now fill the window. Every
-  experiment, the validation campaign, and both A/A tests are rerun at `data-v2`. The
-  `data-v1` E4 results are kept and reported as superseded.
+  experiment, the validation campaign, and both A/A tests are rerun. The `data-v1` E4
+  results are kept and reported as superseded.
+- **A8**, made before any run at `data-v2`, adds measures that industry comparisons
+  commonly report and the protocol lacked: p99.9 and maximum latency, disk syncs and bytes
+  per commit, and CPU time and memory, all descriptive and untested, and the exploratory
+  E1-load sweep. Measurement code changed, not the algorithms, and the runs are made at
+  `data-v3`.
 
 `docs/BUGLOG.md` records every bug found in either algorithm or in shared code, with the
 checker that found it; it is the data for metric M20.
 
 ## 4. Results
 
-*Pending: written from the `data-v2` runs, with every number taken from
+*Pending: written from the `data-v3` runs, with every number taken from
 `docs/RESULTS.md` and the committed results in `experiments/results/`.*
 
 ### 4.1 Validation: checkers, A/A tests, and E2
@@ -308,6 +314,9 @@ checker that found it; it is the data for metric M20.
   paper's user study.
 - Reachable states (E6) depend on what the compared state includes. Both adapters use one
   definition, but Raft's state includes its vote, which Multi-Paxos does not persist.
+- E1's clients are closed-loop: each waits for its reply before sending again, which can
+  hide tail latency, because a slow cluster also slows the load. E1-load sends at fixed
+  rates instead, but it is exploratory, with 30 trials per point.
 - Catch-up time (E4b, E4c) includes the wait for the leader's next heartbeat after the
   follower returns. Because each trial starts right after a leader is ready, that wait
   depends on how long the trial's commands took to commit. This applies to both algorithms,
@@ -332,9 +341,12 @@ checker that found it; it is the data for metric M20.
 
 - The simulator and localhost are not real networks: delays are drawn from one uniform
   distribution, and clusters have at most five servers.
-- The real cluster runs on one machine, so its servers share CPU cores and one SSD.
-  Storage calls `fsync(2)` (amendment A6), which survives process crashes, the only faults
-  injected, but not necessarily power loss.
+- The real cluster runs on one machine, so its servers share CPU cores and one SSD with
+  each other and with the clients, and each server's delay injection spins for the last
+  300 µs of each held message. CPU time per commit leaves out that thread, but the cores it
+  takes are missing from the servers, so the saturation points of E1-load belong to this
+  harness as much as to the algorithms. Storage calls `fsync(2)` (amendment A6), which
+  survives process crashes, the only faults injected, but not necessarily power loss.
 - The data plane uses brute-force search, keeps data in memory, and holds 100,000 GloVe-25
   vectors. Only its recovery time is compared, and that depends on lease timing more than
   on search.
@@ -351,7 +363,7 @@ checker that found it; it is the data for metric M20.
 
 ## 6. Conclusion
 
-*Pending the `data-v2` runs.*
+*Pending the `data-v3` runs.*
 
 ## References
 

@@ -224,6 +224,7 @@ fn run_real(
     let mut failover_rows = Vec::new();
     let mut partition_rows = Vec::new();
     let mut vector_rows = Vec::new();
+    let mut load_rows = Vec::new();
     let dataset = if jobs
         .iter()
         .any(|(_, run, _)| run.scenario == Scenario::Vectors)
@@ -264,6 +265,9 @@ fn run_real(
                     order,
                     runtime.block_on(crate::real::partition(run, seed, kind)),
                 ));
+            }
+            Scenario::Load => {
+                load_rows.push((order, runtime.block_on(crate::load::trial(run, seed))))
             }
             Scenario::Vectors => {
                 let dataset = dataset.as_ref().expect("loaded above");
@@ -309,6 +313,11 @@ fn run_real(
         let rows = sorted(vector_rows);
         trials += rows.len();
         results::write_csv(output, "real-vectors.csv", &rows)?;
+    }
+    if !load_rows.is_empty() {
+        let rows = sorted(load_rows);
+        trials += rows.len();
+        results::write_csv(output, "real-load.csv", &rows)?;
     }
     Ok(trials)
 }
@@ -426,7 +435,7 @@ pub(crate) fn run_columns(run: &RunConfig) -> String {
     )
 }
 
-const RUN_HEADER: &str = "label,arm,algorithm,servers,network,clients,election_timeout_min_ms,election_timeout_max_ms,uncommitted";
+pub(crate) const RUN_HEADER: &str = "label,arm,algorithm,servers,network,clients,election_timeout_min_ms,election_timeout_max_ms,uncommitted";
 
 pub(crate) fn optional(value: Option<f64>) -> String {
     value.map(results::number).unwrap_or_default()

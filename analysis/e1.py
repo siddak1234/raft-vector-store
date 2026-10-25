@@ -8,6 +8,11 @@ two-sided tests (Wilcoxon signed-rank for paired, Mann-Whitney U for unpaired) a
 Holm-corrected across the configurations of the experiment.
 
 Single-server configurations are the reference and are reported but not tested.
+
+Amendment A8 adds descriptive measures: p99.9 and maximum latency, storage syncs and bytes
+synced per commit, and, on the real cluster, CPU time per commit and peak memory. They are
+reported as medians and ratios of medians with 90% bootstrap intervals, without tests, so
+the Holm family of the pre-registered tests is unchanged.
 """
 
 import sys
@@ -30,6 +35,14 @@ REPORTED = [
     ("p99_latency_ms", "M7 p99 latency"),
     ("messages_per_commit", "M9 messages per commit"),
     ("bytes_per_commit", "M9 bytes per commit"),
+]
+DESCRIPTIVE = [
+    ("p999_latency_ms", "p99.9 latency"),
+    ("max_latency_ms", "max latency"),
+    ("fsyncs_per_commit", "fsyncs per commit"),
+    ("storage_bytes_per_commit", "bytes synced per commit"),
+    ("cpu_ms_per_commit", "CPU ms per commit"),
+    ("max_rss_mb", "peak memory MB"),
 ]
 
 
@@ -69,6 +82,48 @@ def compare(frame: pd.DataFrame, paired: bool) -> pd.DataFrame:
     table = pd.DataFrame(rows)
     table["p (Holm)"] = holm(table["p"].tolist())
     return table
+
+
+def descriptive(frame: pd.DataFrame, paired: bool) -> pd.DataFrame:
+    """The amendment A8 measures: medians and the ratio of medians (Multi-Paxos over Raft)
+    with its 90% bootstrap interval, for each configuration with data. No tests."""
+    rows = []
+    for config, group in frame.groupby(["servers", "network", "clients"]):
+        raft = group[group["algorithm"] == "raft"].set_index("seed")
+        paxos = group[group["algorithm"] == "paxos"].set_index("seed")
+        for column, name in DESCRIPTIVE:
+            if column not in frame.columns:
+                continue
+            if paired:
+                both = raft[[column]].join(paxos[[column]], lsuffix="_raft", rsuffix="_paxos").dropna()
+                a = both[f"{column}_raft"].to_numpy(float)
+                b = both[f"{column}_paxos"].to_numpy(float)
+            else:
+                a = raft[column].dropna().to_numpy(float)
+                b = paxos[column].dropna().to_numpy(float)
+            if len(a) == 0 or len(b) == 0:
+                continue
+            ratio, low, high = ratio_of_medians(a, b, paired=paired)
+            rows.append({
+                "servers": config[0],
+                "network": config[1],
+                "clients": config[2],
+                "metric": name,
+                "n": len(a) if paired else f"{len(a)}/{len(b)}",
+                "raft": float(np.median(a)),
+                "paxos": float(np.median(b)),
+                "ratio": ratio,
+                "90% CI": f"[{low:.3f}, {high:.3f}]",
+            })
+    return pd.DataFrame(rows)
+
+
+def show_descriptive(table: pd.DataFrame, label: str) -> None:
+    print(f"\nDescriptive measures ({label}; amendment A8, not tested):")
+    if table.empty:
+        print("  (none in these results)")
+        return
+    print(table.to_string(index=False, float_format=lambda v: f"{v:.4g}"))
 
 
 def verdict(table: pd.DataFrame, label: str) -> bool:
@@ -122,6 +177,7 @@ def main() -> int:
     table = compare(sim, paired=True)
     show(table)
     verdict(table, "simulator")
+    show_descriptive(descriptive(sim, paired=True), "simulator")
     print(f"Figure: {plot(table, 'E1_ratios.png', 'E1 simulator: Multi-Paxos / Raft')}")
     try:
         real = load(folder, "real-steady.csv")
@@ -132,6 +188,7 @@ def main() -> int:
     table = compare(real, paired=False)
     show(table)
     verdict(table, "real cluster")
+    show_descriptive(descriptive(real, paired=False), "real cluster")
     print(f"Figure: {plot(table, 'E1_real_ratios.png', 'E1 real cluster: Multi-Paxos / Raft')}")
     return 0
 

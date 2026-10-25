@@ -57,6 +57,8 @@ pub struct Metrics {
     pub entries_to_leaders: u64,
     /// Storage syncs that wrote something.
     pub fsyncs: u64,
+    /// Bytes those syncs wrote, sized as in the server's write-ahead log.
+    pub storage_bytes: u64,
     /// Client commands acknowledged to their clients.
     pub client_replies: u64,
 }
@@ -95,6 +97,7 @@ impl Metrics {
                 .entries_to_leaders
                 .saturating_sub(earlier.entries_to_leaders),
             fsyncs: self.fsyncs.saturating_sub(earlier.fsyncs),
+            storage_bytes: self.storage_bytes.saturating_sub(earlier.storage_bytes),
             client_replies: self.client_replies.saturating_sub(earlier.client_replies),
         }
     }
@@ -118,11 +121,13 @@ mod tests {
         let earlier = metrics.clone();
         metrics.record_send(NodeId(2), "B", 5, 0);
         metrics.fsyncs += 3;
+        metrics.storage_bytes += 40;
 
         let interval = metrics.since(&earlier);
         assert_eq!(interval.sent.messages, 1);
         assert_eq!(interval.sent.bytes, 5);
         assert_eq!(interval.fsyncs, 3);
+        assert_eq!(interval.storage_bytes, 40);
         assert!(!interval.by_kind.contains_key("A"));
         assert_eq!(interval.sent_by(NodeId(2)).messages, 1);
         assert_eq!(interval.sent_by(NodeId(1)).messages, 0);

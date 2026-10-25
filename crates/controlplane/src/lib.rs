@@ -158,7 +158,14 @@ fn serve<C: Inspect>(options: ServerOptions) -> Result<(), String> {
         options.leases,
     );
     let peer = PeerService::new(options.id, inputs.clone(), Arc::clone(&faults));
-    let api = ControlPlaneService::new(options.id.0, inputs, shared, faults, leases);
+    let api = ControlPlaneService::new(
+        options.id.0,
+        inputs,
+        shared,
+        faults,
+        leases,
+        peer.delay_cpu_us(),
+    );
     log.write(&serde_json::json!({
         "event": "listening",
         "server": options.id.0,

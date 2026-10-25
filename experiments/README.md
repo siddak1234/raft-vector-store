@@ -5,7 +5,8 @@ Definitions and raw results for the experiments in `docs/PLAN.md` §7.
 ## `configs/`
 
 One file per experiment, such as `E2.toml`, versioned like code. Each config lists runs:
-a scenario (`steady`, `figure16`, `failover`, `partition`, or `modelcheck`), where it runs
+a scenario (`steady`, `figure16`, `failover`, `recovery`, `catch_up`, `partition`,
+`vectors`, `load`, or `modelcheck`), where it runs
 (`environment = "simulator"`, the default, or `"real"`), the algorithm, the cluster size,
 the network, the seed range, and the scenario's settings. `cargo xtask experiment <id>`
 runs `configs/<id>.toml`.
@@ -18,6 +19,7 @@ runs `configs/<id>.toml`.
 | `AA-real.toml` | A/A test on the real cluster (`docs/RESEARCH.md` §9.2, A1.9) |
 | `E2-real.toml` | E2 on the real cluster at 150–300 ms (`docs/RESEARCH.md` A1.6) |
 | `E1.toml` | Steady state, simulator and real cluster (H1) |
+| `E1-load.toml` | Exploratory: commit latency against offered load, real cluster (`docs/RESEARCH.md` A8) |
 | `E3.toml` | Failover with `k` uncommitted entries, simulator and real cluster (H2a, H2b) |
 | `E4.toml` | Log recovery after consecutive crashes, and catch-up (H3; amendment A5) |
 | `E5.toml` | Partitions P1–P5, simulator, and P1 and P3 on the real cluster (H2b; A5) |
@@ -40,7 +42,7 @@ results/<experiment>/<UTC timestamp>-<commit>/
   *.csv           one row per trial: steady.csv, figure16.csv, failover.csv,
                   partition.csv, recovery.csv, and, for real-cluster runs,
                   real-steady.csv, real-figure16.csv, real-failover.csv,
-                  real-partition.csv, real-vectors.csv; one row per
+                  real-partition.csv, real-vectors.csv, real-load.csv; one row per
                   search in modelcheck.csv; runs.csv for validation; checks.csv for the
                   Phase 4 data-plane checks (`cargo xtask dataplane`); for E7,
                   protocol.json and the JSON output of rust-code-analysis-cli

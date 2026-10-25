@@ -625,6 +625,65 @@ unacknowledged or none are left. The fix is tagged `data-v2`.
   partial `data-v1` E6 output was not committed and is not reported: we stopped the run, the
   harness did not fail.
 
+### A8. 2026-10-25: Descriptive measures and an exploratory load sweep, fixed before their data
+
+These were added after `data-v2` was tagged and before any run at it, so no data of the
+experiments they touch existed; the only earlier result, the superseded `data-v1` E4 run,
+has none of these measures. They decide no hypothesis: H1–H6 and their decision rules are
+unchanged.
+
+1. **Descriptive measures in E1**, in the simulator and on the real cluster, per trial:
+   - the 99.9th percentile (nearest rank) and the maximum commit latency, over the same
+     replies as M7;
+   - the storage syncs that wrote something, and the bytes they wrote, of all servers
+     during the measurement window, per commit. Bytes are counted as the server's
+     write-ahead log writes them, a 4-byte length and the encoded record; the simulator
+     sizes the same records the same way;
+   - on the real cluster only, the CPU time, user plus system, of all server processes
+     during the window per commit (from `getrusage`), and the largest peak resident memory
+     of any server. The counters are read from each server's status at the start and the
+     end of the window. The CPU time of each server's delay thread, which holds incoming
+     messages for the injected delay and spins for the last 300 µs of each (amendment
+     A4.3), is measured with the thread's own CPU clock and subtracted: it is harness, not
+     consensus, and at low rates it would be most of a server's CPU time.
+
+   They are reported as medians, with the ratio of medians (Multi-Paxos over Raft) and its
+   90% bootstrap interval, and are not tested, so the Holm family of the pre-registered
+   tests is unchanged.
+2. **E1-load (exploratory).** Commit latency against offered load, on the real cluster
+   only, because the simulator gives storage and processing no time and so has no
+   saturation point.
+   - **Configurations:** 3 and 5 servers, both algorithms, the paper-like network, offered
+     loads of 1,000, 2,000, 4,000, 6,000, 8,000, and 10,000 commands per second. Seeds 1–30
+     per configuration, so 720 trials (`experiments/configs/E1-load.toml`).
+   - **Procedure:** as E1's real-cluster trial, but commands go out at the offered rate
+     whatever the replies: command `i` is due `i / rate` seconds after the start, each in
+     a session of its own. Latency runs from the moment a command was due, so a backlog in
+     the client counts against the cluster. The first 2 s are warm-up and the next 10 s
+     are measured. Throughput counts the replies received in the window; latency covers
+     the commands due in the window. A command with no reply within 2 s of when it was due
+     is late and counts as slower than every reply. Clients follow amendment A1.1 but give
+     up after 2 s, and their injected delays are a timed sleep without the final spin of
+     A4.3: with thousands of commands in flight, the spins would take several of the
+     machine's 8 cores from the servers. A first scratch pilot with spinning clients
+     starved the servers at 8,000 commands per second.
+   - **Measures per trial:** commands offered, replies, throughput, late commands, the
+     median, p99, p99.9, and maximum latency, M9, and the measures of item 1.
+   - **Rates.** The rates were chosen from two scratch pilots (seeds 1–2, 250–16,000
+     commands per second), the second with the clients and the CPU measure described here,
+     to span from well below to above the points where the configurations stopped keeping
+     up: between 4,000 and 8,000 commands per second with 5 servers, and between 8,000 and
+     12,000 with 3. The pilots are not reported.
+   - **Analysis:** for each configuration and rate, the medians across trials; the highest
+     sustained rate, at which the median throughput is at least 95% of the offered rate and
+     the median trial has no late command; and latency against throughput. No tests.
+   - E1-load runs after E1.
+3. **The tag.** These changes add measurement code only and change neither algorithm, so
+   the rule that only bug fixes follow `data-v1` (`docs/PLAN.md` §4.3) still holds. They
+   are tagged `data-v3` so that every run comes from one version of the code: every run
+   amendment A7 lists, and E1-load, is made at `data-v3`, from commits whose code equals
+   it, as A7 requires of `data-v2`. No run was made at `data-v2`.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

@@ -3,13 +3,24 @@
 use consensus::{Entry, HardState, LogIndex, MemStorage, Storage};
 
 /// Wraps [`MemStorage`] and records, in shared code, what the checks and metrics need:
-/// the indexes written since the last check, the entries discarded (metric M17), and the
-/// gaps in the log (metric M15). The algorithm sees an ordinary [`Storage`].
+/// the indexes written since the last check, the entries discarded (metric M17), the gaps
+/// in the log (metric M15), and the bytes each sync writes (`docs/RESEARCH.md` amendment
+/// A8). The algorithm sees an ordinary [`Storage`].
 #[derive(Debug, Clone, Default)]
 pub(crate) struct TrackedStorage {
     inner: MemStorage,
     written: Vec<LogIndex>,
     discarded: u64,
+    /// Bytes of the writes not yet synced, and of the synced ones not yet taken.
+    unsynced_bytes: u64,
+    synced_bytes: u64,
+}
+
+/// The size of one write in the server's write-ahead log (`controlplane::storage`): a
+/// 4-byte length, then the record in postcard. A record is an enum variant, which postcard
+/// encodes as the variant's index followed by its fields, the same bytes as this tuple.
+fn record_bytes(record: &impl serde::Serialize) -> u64 {
+    4 + postcard::to_allocvec(record).map_or(0, |encoded| encoded.len() as u64)
 }
 
 impl TrackedStorage {
@@ -32,10 +43,16 @@ impl TrackedStorage {
         self.inner.last_index().0 - self.inner.len() as u64
     }
 
+    /// Bytes written by syncs since the last call.
+    pub(crate) fn take_synced_bytes(&mut self) -> u64 {
+        std::mem::take(&mut self.synced_bytes)
+    }
+
     /// Simulates a crash: unsynced writes are lost.
     pub(crate) fn crash(&mut self) {
         self.inner.crash();
         self.written.clear();
+        self.unsynced_bytes = 0;
     }
 }
 
@@ -45,6 +62,7 @@ impl Storage for TrackedStorage {
     }
 
     fn set_hard_state(&mut self, state: HardState) {
+        self.unsynced_bytes += record_bytes(&(0u32, state.term.0, state.voted_for.map(|n| n.0)));
         self.inner.set_hard_state(state);
     }
 
@@ -65,6 +83,7 @@ impl Storage for TrackedStorage {
             self.discarded += 1;
         }
         self.written.push(index);
+        self.unsynced_bytes += record_bytes(&(1u32, index.0, &entry));
         self.inner.put(index, entry);
     }
 
@@ -74,11 +93,17 @@ impl Storage for TrackedStorage {
             .filter(|&i| self.inner.entry(LogIndex(i)).is_some())
             .count();
         self.discarded += removed as u64;
+        self.unsynced_bytes += record_bytes(&(2u32, from.0));
         self.inner.truncate(from);
     }
 
     fn sync(&mut self) -> bool {
-        self.inner.sync()
+        let wrote = self.inner.sync();
+        if wrote {
+            self.synced_bytes += self.unsynced_bytes;
+        }
+        self.unsynced_bytes = 0;
+        wrote
     }
 }
 
@@ -114,5 +139,23 @@ mod tests {
             vec![LogIndex(1), LogIndex(4), LogIndex(1), LogIndex(4)]
         );
         assert!(storage.take_written().is_empty());
+    }
+
+    #[test]
+    fn counts_the_bytes_each_sync_writes() {
+        let mut storage = TrackedStorage::default();
+        storage.put(LogIndex(1), entry(1, 1));
+        assert!(storage.sync());
+        let one = storage.take_synced_bytes();
+        // A 4-byte length, then variant 1, index 1, and the entry.
+        let encoded = postcard::to_allocvec(&(1u32, 1u64, entry(1, 1))).expect("encode");
+        assert_eq!(one, 4 + encoded.len() as u64);
+        assert_eq!(storage.take_synced_bytes(), 0);
+
+        // Writes lost in a crash are never counted.
+        storage.put(LogIndex(2), entry(1, 2));
+        storage.crash();
+        assert!(!storage.sync());
+        assert_eq!(storage.take_synced_bytes(), 0);
     }
 }

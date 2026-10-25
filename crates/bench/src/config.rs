@@ -48,6 +48,9 @@ pub struct RunConfig {
     /// Number of closed-loop clients (steady scenario only).
     #[serde(default)]
     pub clients: usize,
+    /// Offered load in commands per second (load scenario only).
+    #[serde(default)]
+    pub rate: u32,
     /// Election timeout range in milliseconds. The heartbeat interval is half the minimum.
     /// Defaults to 150–300 ms.
     #[serde(default)]
@@ -112,6 +115,8 @@ pub enum Scenario {
     Partition,
     /// E8: vector store recovery (real cluster only).
     Vectors,
+    /// E1-load: commit latency against offered load (real cluster only; amendment A8).
+    Load,
     /// E6: exhaustive model checking of reachable states.
     Modelcheck,
 }
@@ -201,6 +206,13 @@ pub fn load(path: &std::path::Path) -> Result<ExperimentConfig, String> {
                 run.label
             ));
         }
+        if run.scenario == Scenario::Load && (run.environment != Environment::Real || run.rate == 0)
+        {
+            return Err(format!(
+                "run {}: a load run needs `rate` and runs on the real cluster",
+                run.label
+            ));
+        }
         if run.scenario == Scenario::Partition && run.partition.is_none() {
             return Err(format!(
                 "run {}: a partition run needs `partition`",
@@ -242,6 +254,28 @@ mod tests {
         assert_eq!(run.network, Some(NetworkKind::Paper));
         assert_eq!(run.seeds().len(), 1000);
         assert_eq!(run.election_timeout_ms, Some([150, 155]));
+    }
+
+    #[test]
+    fn a_load_run_needs_a_rate_and_the_real_cluster() {
+        let run = |extra: &str| {
+            format!(
+                "id = \"X\"\ndescription = \"\"\n[[run]]\nscenario = \"load\"\nlabel = \"a\"\n\
+                 algorithm = \"raft\"\nservers = 3\nnetwork = \"paper\"\nseeds = [1, 2]\n{extra}"
+            )
+        };
+        let check = |text: String| {
+            let dir = std::env::temp_dir().join(format!("rvs-config-test-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("create");
+            let path = dir.join("load.toml");
+            std::fs::write(&path, text).expect("write");
+            let result = super::load(&path).map(|_| ());
+            let _ = std::fs::remove_dir_all(&dir);
+            result
+        };
+        assert!(check(run("environment = \"real\"\nrate = 500\n")).is_ok());
+        assert!(check(run("environment = \"real\"\n")).is_err());
+        assert!(check(run("rate = 500\n")).is_err());
     }
 
     #[test]

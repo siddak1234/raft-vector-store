@@ -9,6 +9,7 @@ const ANALYSES: &[&str] = &[
     "validation.py",
     "aa.py",
     "e1.py",
+    "e1_load.py",
     "e2.py",
     "e3.py",
     "e4.py",

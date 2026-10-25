@@ -14,6 +14,7 @@
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -146,6 +147,7 @@ pub struct PeerService {
     delayed: mpsc::Sender<(Instant, NodeId, Vec<u8>)>,
     faults: Arc<Mutex<Faults>>,
     jitter: Mutex<Jitter>,
+    delay_cpu_us: Arc<AtomicU64>,
 }
 
 impl PeerService {
@@ -154,17 +156,37 @@ impl PeerService {
     pub fn new(me: NodeId, inputs: mpsc::Sender<Input>, faults: Arc<Mutex<Faults>>) -> Self {
         let (delayed, queue) = mpsc::channel();
         let release = inputs.clone();
+        let delay_cpu_us = Arc::new(AtomicU64::new(0));
+        let cpu = Arc::clone(&delay_cpu_us);
         std::thread::Builder::new()
             .name("delay".into())
-            .spawn(move || release_delayed(&queue, &release))
+            .spawn(move || release_delayed(&queue, &release, &cpu))
             .expect("cannot start the delay thread");
         PeerService {
             inputs,
             delayed,
             faults,
             jitter: Mutex::new(Jitter::new(rpc::now_micros() ^ me.0)),
+            delay_cpu_us,
         }
     }
+
+    /// The CPU time, in microseconds, the thread that holds delayed messages has used. It is
+    /// mostly the spin at the end of each delay, which is harness, not consensus, so the
+    /// experiments subtract it from the server's CPU time (`docs/RESEARCH.md` amendment A8).
+    pub fn delay_cpu_us(&self) -> Arc<AtomicU64> {
+        Arc::clone(&self.delay_cpu_us)
+    }
+}
+
+/// The CPU time the calling thread has used, in microseconds; 0 if the system does not
+/// report it.
+fn thread_cpu_us() -> u64 {
+    use nix::time::{ClockId, clock_gettime};
+    clock_gettime(ClockId::CLOCK_THREAD_CPUTIME_ID).map_or(0, |t| {
+        u64::try_from(t.tv_sec()).unwrap_or(0) * 1_000_000
+            + u64::try_from(t.tv_nsec()).unwrap_or(0) / 1000
+    })
 }
 
 #[tonic::async_trait]
@@ -209,10 +231,15 @@ impl Peer for PeerService {
 }
 
 /// Holds delayed messages until their time, then hands them to the driver.
-fn release_delayed(queue: &mpsc::Receiver<(Instant, NodeId, Vec<u8>)>, out: &mpsc::Sender<Input>) {
+fn release_delayed(
+    queue: &mpsc::Receiver<(Instant, NodeId, Vec<u8>)>,
+    out: &mpsc::Sender<Input>,
+    cpu_us: &AtomicU64,
+) {
     const SPIN: Duration = Duration::from_micros(300);
     let mut held = Held::default();
     loop {
+        cpu_us.store(thread_cpu_us(), Ordering::Relaxed);
         while let Ok(item) = queue.try_recv() {
             held.hold(item);
         }

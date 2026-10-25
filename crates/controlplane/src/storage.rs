@@ -5,8 +5,9 @@
 //! replayed. A record cut short by a crash during a write is ignored,
 //! which is safe because the driver never acts on a write before `sync` returns.
 //!
-//! The wrapper also measures, in shared code, the log gaps (metric M15) and the entries
-//! discarded (metric M17), as the simulator's storage wrapper does.
+//! The wrapper also measures, in shared code, the log gaps (metric M15), the entries
+//! discarded (metric M17), and the syncs and bytes written (`docs/RESEARCH.md` amendment
+//! A8), as the simulator's storage wrapper does.
 
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
@@ -57,6 +58,8 @@ pub struct FileStorage {
     pending: Vec<u8>,
     discarded: u64,
     max_gaps: u64,
+    syncs: u64,
+    bytes_written: u64,
 }
 
 impl FileStorage {
@@ -83,6 +86,8 @@ impl FileStorage {
             pending: Vec::new(),
             discarded: 0,
             max_gaps: 0,
+            syncs: 0,
+            bytes_written: 0,
         };
         let mut rest = bytes.as_slice();
         while rest.len() >= 4 {
@@ -131,6 +136,16 @@ impl FileStorage {
     /// The largest number of gaps the log has had (metric M15).
     pub fn max_gaps(&self) -> u64 {
         self.max_gaps
+    }
+
+    /// Syncs that wrote something, since the storage was opened.
+    pub fn syncs(&self) -> u64 {
+        self.syncs
+    }
+
+    /// Bytes appended to the log file, since the storage was opened.
+    pub fn bytes_written(&self) -> u64 {
+        self.bytes_written
     }
 
     fn note_gaps(&mut self) {
@@ -202,6 +217,8 @@ impl Storage for FileStorage {
         // The driver contract: storage that cannot write must panic, and the server then
         // restarts from what was synced.
         result.expect("cannot write the storage file");
+        self.syncs += 1;
+        self.bytes_written += self.pending.len() as u64;
         self.pending.clear();
         true
     }
@@ -250,6 +267,28 @@ mod tests {
         assert_eq!(storage.hard_state().voted_for, Some(NodeId(2)));
         assert_eq!(storage.entry(LogIndex(2)), Some(&entry(2, 2)));
         assert_eq!(storage.last_index(), LogIndex(2));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn counts_syncs_and_the_bytes_they_write() {
+        let dir = temp_dir("syncs");
+        let mut storage = FileStorage::open(&dir).expect("open");
+        storage.put(LogIndex(1), entry(1, 1));
+        storage.set_hard_state(HardState {
+            term: Term(2),
+            voted_for: None,
+        });
+        assert!(storage.sync());
+        assert!(!storage.sync());
+        assert_eq!(storage.syncs(), 1);
+        let on_disk = std::fs::metadata(dir.join("log")).expect("stat").len();
+        assert_eq!(storage.bytes_written(), on_disk);
+        // The simulator sizes the same records as tuples of the variant's index and its
+        // fields (`sim::storage`), which postcard encodes the same way.
+        let put = postcard::to_allocvec(&(1u32, 1u64, entry(1, 1))).expect("encode");
+        let hard = postcard::to_allocvec(&(0u32, 2u64, None::<u64>)).expect("encode");
+        assert_eq!(on_disk, (4 + put.len() + 4 + hard.len()) as u64);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

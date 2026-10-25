@@ -1,0 +1,247 @@
+# E1-load, exploratory (docs/RESEARCH.md amendment A8): commit latency against offered
+# load on the real cluster. Commands go out at a fixed rate whatever the replies; latency
+# runs from when each command was due. 3 and 5 servers, paper-like network, offered
+# rates 1000, 2000, 4000, 6000, 8000, 10000 commands per second, 30 seeds each.
+
+id = "E1-load"
+description = "Exploratory: commit latency against offered load, real cluster"
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-1000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+rate = 1000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-1000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+rate = 1000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-2000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+rate = 2000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-2000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+rate = 2000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-4000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+rate = 4000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-4000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+rate = 4000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-6000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+rate = 6000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-6000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+rate = 6000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-8000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+rate = 8000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-8000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+rate = 8000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-10000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+rate = 10000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "3s-10000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+rate = 10000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-1000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+rate = 1000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-1000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+rate = 1000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-2000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+rate = 2000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-2000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+rate = 2000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-4000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+rate = 4000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-4000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+rate = 4000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-6000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+rate = 6000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-6000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+rate = 6000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-8000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+rate = 8000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-8000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+rate = 8000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-10000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+rate = 10000
+seeds = [1, 30]
+
+[[run]]
+scenario = "load"
+environment = "real"
+label = "5s-10000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+rate = 10000
+seeds = [1, 30]

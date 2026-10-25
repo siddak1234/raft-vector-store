@@ -134,6 +134,10 @@ pub struct Shared {
     pub map: Arc<ShardMap>,
     /// When this server became leader of the current term, if it leads.
     pub leader_since: Option<Instant>,
+    /// Storage syncs that wrote something, since the server started.
+    pub fsyncs: u64,
+    /// Bytes those syncs wrote.
+    pub storage_bytes: u64,
 }
 
 impl Shared {
@@ -147,6 +151,8 @@ impl Shared {
             applied_index: 0,
             map: Arc::new(ShardMap::default()),
             leader_since: None,
+            fsyncs: 0,
+            storage_bytes: 0,
         }
     }
 }
@@ -517,6 +523,8 @@ impl<C: Inspect> Driver<C> {
             shared.leader = status.leader;
             shared.commit_index = status.commit_index.0;
             shared.applied_index = self.applied.0;
+            shared.fsyncs = self.storage.syncs();
+            shared.storage_bytes = self.storage.bytes_written();
             if map_changed {
                 shared.map = Arc::new(self.state.map().clone());
             }

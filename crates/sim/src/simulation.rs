@@ -624,6 +624,7 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
         }
         if server.storage.sync() {
             self.metrics.fsyncs += 1;
+            self.metrics.storage_bytes += server.storage.take_synced_bytes();
         }
         for index in server.storage.take_written() {
             self.checker

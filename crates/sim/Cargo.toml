@@ -11,8 +11,6 @@ publish.workspace = true
 [dependencies]
 consensus.workspace = true
 postcard.workspace = true
-
-[dev-dependencies]
 serde.workspace = true
 
 [lints]

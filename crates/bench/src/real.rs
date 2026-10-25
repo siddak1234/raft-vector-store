@@ -30,10 +30,10 @@ use crate::config::RunConfig;
 use crate::scenarios::failover::FailoverRow;
 use crate::scenarios::figure16::Figure16Row;
 use crate::scenarios::steady::SteadyRow;
-use crate::scenarios::{median, ms, percentile, run_columns};
+use crate::scenarios::{ms, run_columns};
 
-const WARMUP: Duration = Duration::from_secs(2);
-const MEASURE: Duration = Duration::from_secs(10);
+pub(crate) const WARMUP: Duration = Duration::from_secs(2);
+pub(crate) const MEASURE: Duration = Duration::from_secs(10);
 const CAP: Duration = Duration::from_secs(60);
 
 fn algorithm(run: &RunConfig) -> Algorithm {
@@ -48,15 +48,60 @@ fn delay_us(run: &RunConfig) -> u64 {
     run.network().one_way_delay().as_micros() as u64
 }
 
+/// One server's resource use, from its status (`docs/RESEARCH.md` amendment A8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Usage {
+    id: u64,
+    fsyncs: u64,
+    storage_bytes: u64,
+    cpu_us: u64,
+    max_rss_bytes: u64,
+    delay_cpu_us: u64,
+}
+
+/// The resource columns of a row, per commit, over the window between two snapshots of the
+/// same servers: storage syncs, bytes they wrote, and CPU time in milliseconds without the
+/// delay thread's (amendment A8), all servers together, then the largest peak resident
+/// memory of any server in megabytes (10⁶ bytes). `None` if either snapshot is missing or
+/// the servers differ.
+pub(crate) fn usage_per_commit(
+    before: Option<&[Usage]>,
+    after: Option<&[Usage]>,
+    commits: u64,
+) -> Option<(f64, f64, f64, f64)> {
+    let (before, after) = (before?, after?);
+    if commits == 0
+        || before.len() != after.len()
+        || before.iter().zip(after).any(|(b, a)| b.id != a.id)
+    {
+        return None;
+    }
+    let total = |field: fn(&Usage) -> u64| -> f64 {
+        before
+            .iter()
+            .zip(after)
+            .map(|(b, a)| field(a).saturating_sub(field(b)))
+            .sum::<u64>() as f64
+            / commits as f64
+    };
+    let rss = after.iter().map(|a| a.max_rss_bytes).max().unwrap_or(0);
+    Some((
+        total(|u| u.fsyncs),
+        total(|u| u.storage_bytes),
+        (total(|u| u.cpu_us) - total(|u| u.delay_cpu_us)).max(0.0) / 1000.0,
+        rss as f64 / 1e6,
+    ))
+}
+
 /// A cluster started for one trial, removed when dropped.
-struct Trial {
+pub(crate) struct Trial {
     cluster: LocalCluster,
     servers: Vec<(u64, String)>,
     delay_us: u64,
 }
 
 impl Trial {
-    fn start(run: &RunConfig, seed: u64, label: &str) -> Result<Trial, String> {
+    pub(crate) fn start(run: &RunConfig, seed: u64, label: &str) -> Result<Trial, String> {
         let [min, max] = run.election_timeout_ms.unwrap_or([150, 300]);
         let options = LocalOptions {
             algorithm: algorithm(run),
@@ -75,10 +120,26 @@ impl Trial {
         })
     }
 
-    fn client(&self, id: u64, give_up: Option<Duration>) -> Result<ControlClient, String> {
+    pub(crate) fn client(
+        &self,
+        id: u64,
+        give_up: Option<Duration>,
+    ) -> Result<ControlClient, String> {
+        self.client_with(id, give_up, true)
+    }
+
+    /// A client whose injected delays spin at the end for precision, or not
+    /// ([`RetryPolicy::precise_delay`]).
+    pub(crate) fn client_with(
+        &self,
+        id: u64,
+        give_up: Option<Duration>,
+        precise_delay: bool,
+    ) -> Result<ControlClient, String> {
         let policy = RetryPolicy {
             delay_us: self.delay_us,
             give_up,
+            precise_delay,
             ..RetryPolicy::default()
         };
         ControlClient::new(&self.servers, policy, id)
@@ -89,7 +150,7 @@ impl Trial {
     }
 
     /// Waits until a leader has committed a command from its own term, so its no-op too.
-    async fn ready(&self) -> bool {
+    pub(crate) async fn ready(&self) -> bool {
         let Ok(mut client) = self.client(1, Some(Duration::from_secs(30))) else {
             return false;
         };
@@ -120,8 +181,35 @@ impl Trial {
         best
     }
 
+    /// Every server's resource use, in server order, or `None` if one does not answer.
+    pub(crate) async fn usage(&self) -> Option<Vec<Usage>> {
+        let mut usage = Vec::new();
+        for (id, _) in &self.servers {
+            let mut raw = self.raw(*id)?;
+            let status = tokio::time::timeout(Duration::from_secs(1), raw.status(Empty {}))
+                .await
+                .ok()?
+                .ok()?
+                .into_inner();
+            usage.push(Usage {
+                id: *id,
+                fsyncs: status.fsyncs,
+                storage_bytes: status.storage_bytes,
+                cpu_us: status.cpu_us,
+                max_rss_bytes: status.max_rss_bytes,
+                delay_cpu_us: status.delay_cpu_us,
+            });
+        }
+        Some(usage)
+    }
+
     /// The measurement logs of every running server.
-    async fn events(&self) -> Vec<Events> {
+    pub(crate) async fn events(&self) -> Vec<Events> {
+        self.events_within(Duration::from_secs(5)).await
+    }
+
+    /// The measurement logs of every running server that answers within `timeout`.
+    pub(crate) async fn events_within(&self, timeout: Duration) -> Vec<Events> {
         let mut logs = Vec::new();
         for (id, _) in &self.servers {
             if !self.cluster.is_running(*id) {
@@ -130,8 +218,7 @@ impl Trial {
             let Some(mut raw) = self.raw(*id) else {
                 continue;
             };
-            if let Ok(Ok(reply)) =
-                tokio::time::timeout(Duration::from_secs(5), raw.events(Empty {})).await
+            if let Ok(Ok(reply)) = tokio::time::timeout(timeout, raw.events(Empty {})).await
                 && let Ok(events) = rpc::decode::<Events>(&reply.into_inner().events)
             {
                 logs.push(events);
@@ -266,18 +353,7 @@ async fn wait_for(flag: &AtomicBool) {
 
 /// E1 and the A/A test on a real cluster.
 pub async fn steady(run: &RunConfig, seed: u64) -> SteadyRow {
-    let mut row = SteadyRow {
-        run: run_columns(run),
-        seed,
-        ready: false,
-        commits: 0,
-        median_ms: None,
-        p99_ms: None,
-        throughput: 0.0,
-        messages_per_commit: None,
-        bytes_per_commit: None,
-        violations: 0,
-    };
+    let mut row = SteadyRow::new(run, seed);
     let Ok(trial) = Trial::start(run, seed, "steady") else {
         return row;
     };
@@ -288,12 +364,16 @@ pub async fn steady(run: &RunConfig, seed: u64) -> SteadyRow {
     let Ok(clients) = Clients::start(&trial, run.clients) else {
         return row;
     };
+    let started = Instant::now();
     let start = rpc::now_micros();
     let window = (
         start + WARMUP.as_micros() as u64,
         start + (WARMUP + MEASURE).as_micros() as u64,
     );
-    tokio::time::sleep(WARMUP + MEASURE).await;
+    tokio::time::sleep_until((started + WARMUP).into()).await;
+    let before = trial.usage().await;
+    tokio::time::sleep_until((started + WARMUP + MEASURE).into()).await;
+    let after = trial.usage().await;
     let replies = clients.stop().await;
     let events = trial.events().await;
 
@@ -307,17 +387,24 @@ pub async fn steady(run: &RunConfig, seed: u64) -> SteadyRow {
     let (messages, bytes) = sends_between(&events, window.0, window.1);
     row.commits = commits;
     row.throughput = commits as f64 / MEASURE.as_secs_f64();
+    row.set_latencies(&latencies);
     if commits > 0 {
-        row.median_ms = Some(median(&latencies));
-        row.p99_ms = Some(percentile(&latencies, 99.0));
         row.messages_per_commit = Some(messages as f64 / commits as f64);
         row.bytes_per_commit = Some(bytes as f64 / commits as f64);
+    }
+    if let Some((fsyncs, storage_bytes, cpu_ms, rss_mb)) =
+        usage_per_commit(before.as_deref(), after.as_deref(), commits)
+    {
+        row.fsyncs_per_commit = Some(fsyncs);
+        row.storage_bytes_per_commit = Some(storage_bytes);
+        row.cpu_ms_per_commit = Some(cpu_ms);
+        row.max_rss_mb = Some(rss_mb);
     }
     row
 }
 
 /// Messages and bytes all servers sent in `[from, until)`.
-fn sends_between(events: &[Events], from: u64, until: u64) -> (u64, u64) {
+pub(crate) fn sends_between(events: &[Events], from: u64, until: u64) -> (u64, u64) {
     let mut messages = 0;
     let mut bytes = 0;
     for log in events {
@@ -645,4 +732,42 @@ pub async fn partition(
     row.discarded_entries = events.iter().map(|e| e.discarded_entries).sum();
     row.entries_to_leaders = events.iter().map(|e| e.entries_to_leaders).sum();
     row
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Usage, usage_per_commit};
+
+    fn usage(id: u64, fsyncs: u64, cpu_us: u64, delay_cpu_us: u64, rss: u64) -> Usage {
+        Usage {
+            id,
+            fsyncs,
+            storage_bytes: fsyncs * 100,
+            cpu_us,
+            max_rss_bytes: rss,
+            delay_cpu_us,
+        }
+    }
+
+    #[test]
+    fn usage_per_commit_takes_the_window_and_leaves_out_the_delay_thread() {
+        let before = [
+            usage(1, 10, 1_000, 400, 5_000_000),
+            usage(2, 20, 2_000, 400, 6_000_000),
+        ];
+        let after = [
+            usage(1, 30, 9_000, 4_400, 7_000_000),
+            usage(2, 40, 8_000, 2_400, 6_000_000),
+        ];
+        // 40 syncs, 4,000 bytes, and (14,000 - 6,000) µs of CPU over 10 commits.
+        let (fsyncs, bytes, cpu_ms, rss_mb) =
+            usage_per_commit(Some(&before), Some(&after), 10).expect("same servers");
+        assert_eq!(fsyncs, 4.0);
+        assert_eq!(bytes, 400.0);
+        assert!((cpu_ms - 0.8).abs() < 1e-9);
+        assert_eq!(rss_mb, 7.0);
+        assert!(usage_per_commit(Some(&before), None, 10).is_none());
+        assert!(usage_per_commit(Some(&before), Some(&after[..1]), 10).is_none());
+        assert!(usage_per_commit(Some(&before), Some(&after), 0).is_none());
+    }
 }
