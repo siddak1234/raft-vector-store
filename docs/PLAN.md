@@ -379,11 +379,16 @@ summarized in `docs/RESULTS.md`.
 - [x] Passes the shared checkers on the same seed set as Raft: seeds 1–10,000, zero
       violations
 - [x] Stateright adapter for both algorithms (`crates/modelcheck`)
-- [ ] State counts for both algorithms at the bounds of `docs/RESEARCH.md` amendment A5.
+- [x] State counts for both algorithms at the bounds of `docs/RESEARCH.md` amendment A5.
       The bounds of §6 cannot be searched exhaustively on the experiment machine
 
 **Exit:** zero violations across the shared seed set, and state counts recorded for both
 algorithms.
+
+**Status:** done. Multi-Paxos passed seeds 1–10,000 with zero violations, and deliberate
+bugs in it were caught. The model-checking check ran the smallest rung of amendment A5's
+ladder to completion for both algorithms, with both safety properties holding in every
+state. Results are in `docs/RESULTS.md`.
 
 ### Phase 3: Control Plane on a Real Cluster
 
@@ -394,7 +399,8 @@ algorithms.
       server
 - [x] Fault-injection and delay-injection admin commands (`rvs faults`), and the crash
       procedure that E2 and E3 use on a real leader (`docs/RESEARCH.md` amendment A4.8)
-- [ ] `cargo xtask cluster` for 1, 3, and 5 servers; structured logs; metrics export
+- [x] `cargo xtask cluster` for 1, 3, and 5 servers; structured logs (JSON lines); metrics
+      export (each server's measurement log, read over its API)
 - [x] Real-cluster E2 at 150–300 ms, deferred to this phase by `docs/RESEARCH.md`
       amendment A1.6
 - [ ] Real-cluster A/A test, deferred to this phase by amendment A1.9
@@ -432,6 +438,10 @@ results are recorded.
 - The shard keeps accepting writes, and re-replication restores 3 copies.
 - In every test, including the partition tests, the single-primary and no-lost-write checks
   pass.
+
+**Status:** the exit criteria are met for both algorithms (`cargo xtask dataplane`; results
+in `docs/RESULTS.md`). The Milestone A checkbox is open until its wording is settled: a
+shard with one copy cannot accept writes while `minInSync` is 2.
 
 ### Phase 5: Experiments
 

@@ -102,3 +102,183 @@ Three bugs, recorded in `docs/BUGLOG.md`:
 - a message storm in Raft replication
 - a durability check run too early in tests
 - trials without a leader at the crash instant being marked ready
+
+## Phase 2: Multi-Paxos and State-Space Analysis
+
+### Validation campaign for Multi-Paxos (`docs/RESEARCH.md` §9.1)
+
+`cargo xtask validate --algorithm paxos`, results in
+`experiments/results/validation/20261025T003825Z-7fc69f0`. The same campaign as Raft's,
+seed for seed: the fault schedules are generated from each seed in their own random
+stream, so both algorithms faced the same faults.
+
+| | Raft (Phase 1) | Multi-Paxos |
+|---|---|---|
+| Seeds | 1–10,000 | 1–10,000 |
+| Simulated time | 166.7 hours | 166.7 hours |
+| Faults per seed | 82.9 on average | 82.9 on average |
+| Highest term per seed | 76.4 on average | 207.3 on average |
+| Commits per seed | 3,311 on average | 3,436 on average |
+| Seeds with any violation (M12) | **0** | **0** |
+
+Multi-Paxos terms advance faster because each server may campaign only in the terms it
+owns (`t mod N`), so a server skips the terms of the others.
+
+Every Multi-Paxos seed passed election safety, state machine safety, apply order, unique
+entries per index and term, liveness, and durability. Log matching and leader completeness
+are Raft properties and do not apply to Multi-Paxos, whose logs may have gaps.
+
+**Checker sensitivity.** As for Raft in Phase 1, Multi-Paxos was broken on purpose and the
+campaign rerun on seeds 1–10,000. These scratch runs were not committed.
+
+| Deliberate bug | Seeds with violations | Caught by |
+|---|---|---|
+| A new leader keeps the lowest-term entry from the promises instead of the highest | 2,438 of 10,000 | State machine safety |
+| A follower accepts an `Accept` from an earlier term | 2,591 of 10,000 | State machine safety (2,585), durability (6) |
+| A follower commits held entries from any term, not only the leader's | 6,073 of 10,000 | State machine safety |
+
+No bug was found in the Multi-Paxos implementation: it passed every check on its first
+run, so `docs/BUGLOG.md` has no Multi-Paxos entry. Details the specification left open are
+recorded as its amendment A2.
+
+### Model checking
+
+`crates/modelcheck` runs either algorithm under Stateright: 3 servers that never crash, an
+unordered network that never duplicates a message, timers that fire in any order, and
+bounds on client commands, elections per server, and heartbeat timer firings
+(`docs/RESEARCH.md` amendment A5). Two properties are checked in every state: election
+safety (at most one leader per term) and state machine safety (every two servers hold the
+same payload at every index both have committed). A third, that some state commits a client
+command, shows a search with commands is not vacuous; the adapter's test in CI
+(`crates/modelcheck/tests/small.rs`, 2 servers, 1 command) finds such a state for both
+algorithms.
+
+The bounds of §6 (2 commands, 2 elections per server) are far beyond the experiment
+machine: while sizing the search, the smallest variant already had about 37 million states
+per algorithm, and breadth-first search ran out of its 16 GB. Amendment A5 replaces them
+with a fixed ladder of bounds searched depth-first; the reported E6 runs at the
+data-collection tag.
+
+The Phase 2 check of the adapter, `cargo xtask experiment E6-check`, results in
+`experiments/results/E6-check/20261025T030655Z-a352325`, ran the smallest rung of the
+ladder: no client commands, one election per server, no heartbeat timer firings.
+
+| | Raft | Multi-Paxos |
+|---|---|---|
+| Complete | yes | yes |
+| Distinct compared states (M14) | 37,125,265 | 35,753,384 |
+| Distinct search states | 37,389,340 | 36,494,539 |
+| States generated | 219,455,251 | 226,623,590 |
+| Deepest path | 32 steps | 28 steps |
+| Time (8 threads) | 127 s | 170 s |
+| Election safety, state machine safety | held in every state | held in every state |
+
+At this rung Raft reaches about 4% more compared states than Multi-Paxos. This is a check of
+the adapter, not E6: the reported E6 runs at the data-collection tag across the ladder
+(amendment A5.5). Raft's compared state includes the vote, which Multi-Paxos does not
+persist.
+
+**The commit-rule bug under model checking.** Phase 1's random-fault campaign did not catch
+a Raft that commits entries from earlier terms by counting replicas (§5.4.2). That broken
+Raft was model-checked at the rung with one client command, one election per server, and no
+heartbeat timer firings, stopping at the first safety violation; this scratch run was not
+committed. With 64 entries per message, the search reached its cap of 1.2 billion generated
+states (193,916,972 distinct) in 1,596 s without a violation; with one entry per message,
+which allows partial replication, it reached the cap (181,730,717 distinct) in 1,092 s
+without one. The searches did not complete, so they do not show the bug is unreachable
+within these bounds; they show that model checking within what this machine can search does
+not catch it either. The unit test
+`a_leader_does_not_commit_an_old_entry_by_counting_replicas` remains the check that does.
+
+## Phase 3: Control Plane on a Real Cluster
+
+### Writes resume after `kill -9` of the leader
+
+`cargo test -p controlplane --test cluster` starts 3 server processes, commits commands,
+kills the leader with `SIGKILL`, and checks that writes resume, that a server leads a
+higher term, and that the killed server, restarted with its data, catches up to the last
+committed index. It passes for both algorithms and runs in CI on every push.
+
+### E2 on the real cluster (`docs/RESEARCH.md` amendment A1.6)
+
+`cargo xtask experiment E2-real`, results in
+`experiments/results/E2-real/20261025T015147Z-a4fea84`. Five server processes, the
+paper-like delay injected in the transport, 150–300 ms election timeouts, 100 trials of the
+Figure 16 procedure (amendment A4.8).
+
+| | Real cluster | Simulator (Phase 1) |
+|---|---|---|
+| Trials (ready, censored) | 100 (100, 0) | 1,000 |
+| Median time without a leader | 242.6 ms | 210.8 ms |
+| Mean | 280.3 ms | 228.8 ms |
+| p99 | 568.1 ms | 461.3 ms |
+| Maximum | 612.0 ms | 728.7 ms |
+| Election rounds (median) | 1 | 1 |
+
+Figure: `analysis/figures/E2_real.png`. The real cluster is about 30 ms slower at the
+median; it adds process scheduling, the gRPC stack, and real fsync to every step of the
+election, which the simulator does not model.
+
+### The A/A test on the real cluster (`docs/RESEARCH.md` §9.2, amendment A1.9)
+
+`cargo xtask experiment AA-real`, results in
+`experiments/results/AA-real/20261025T015302Z-b0bd0c9`. Raft against itself, 3 servers,
+paper-like delay, 16 clients, seeds 1–100 (arm A) against 101–200 (arm B), interleaved.
+
+| E1 metric | Arm A | Arm B | Ratio B/A, 90% CI | Within [0.95, 1.05] | Holm p |
+|---|---|---|---|---|---|
+| Median commit latency (M7) | 173.3 ms | 173.0 ms | [0.989, 1.007] | yes | 1.00 |
+| p99 commit latency (M7) | 264.2 ms | 254.6 ms | [0.942, 0.991] | **no** | 0.40 |
+| Throughput (M8) | 90.25 /s | 90.85 /s | [0.997, 1.014] | yes | 1.00 |
+| Messages per commit (M9) | 4.897 | 4.893 | [0.995, 1.003] | yes | 1.00 |
+| Bytes per commit (M9) | 654.2 | 654.5 | [0.990, 1.014] | yes | 1.00 |
+
+**Verdict: fail.** No test is significant, but the p99 interval falls below 0.95.
+
+The p99 of a trial is about its 9th-slowest of some 900 commits, because every commit waits
+for a 4 ms `F_FULLFSYNC` on all three servers, whose flushes queue on the machine's one SSD
+(amendment A4.4). It varies widely between trials (standard deviation 42–70 ms) and did not
+drift with the run order. Phase 3 does not close until the harness is fixed and the test
+passes (§9.2).
+
+## Phase 4: Vector Store Data Plane
+
+`cargo xtask dataplane`, results in `experiments/results/dataplane/20261025T023443Z-462b1fb`.
+Every check ran on real processes, 3 control-plane servers and 4 data nodes, once per
+algorithm. The collection has 4 shards with 3 replicas each.
+
+### Search against ground truth
+
+All training vectors were loaded and the first test queries searched, top 10, by brute
+force; results were compared with the dataset's true neighbors.
+
+| Dataset | Vectors | Queries | Raft | Multi-Paxos |
+|---|---|---|---|---|
+| GloVe-25, angular | 1,183,514 | 1,000 | 1,000 exact | 1,000 exact |
+| SIFT, Euclidean | 1,000,000 | 200 | 189 exact, 11 ties | 189 exact, 11 ties |
+
+A *tie* returns the same 10 distances as the ground truth with neighbors at equal distance
+in another order. No query returned a wrong distance.
+
+### Faults under load
+
+Each test loaded 20,000 vectors, ran 4 clients that upserted new vectors throughout, and
+injected one fault 3 s in. Recovery is the time from the fault until shard 0 acknowledged
+a write at a newer epoch, which only a new primary can do.
+
+| Test | Raft | Multi-Paxos |
+|---|---|---|
+| Kill the primary of shard 0 (`SIGKILL`) | recovered in 3.65 s | recovered in 3.66 s |
+| Cut the control-plane leader off with a minority for 10 s | writes never stopped (31,156 to shard 0 during the partition) | writes never stopped (30,262) |
+| Cut the primary of shard 0 off from the control plane for 12 s | recovered in 3.41 s | recovered in 3.38 s |
+
+After every fault, re-replication restored 3 in-sync copies of every shard. In every test,
+under both algorithms:
+
+- **No acknowledged write was lost (C2):** every one of the 153,044–245,202 acknowledged
+  writes was on every in-sync replica.
+- **At most one primary served each shard (C1)** over 138,878–245,202 served requests.
+
+Recovery after a primary fails is bounded below by the lease: the control plane may not
+reassign a shard until `L + δ = 3.5 s` after the last renewal, and the last renewal came up
+to `h = 1 s` before the fault, so `docs/DESIGN.md` §7 predicts at least `L + δ − h = 2.5 s`.
