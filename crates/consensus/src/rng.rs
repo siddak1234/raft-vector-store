@@ -6,9 +6,27 @@
 //! not change between dependency versions.
 
 /// A seeded SplitMix64 random number generator.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+///
+/// Equality and hashing ignore the generator's position: any two generators compare equal.
+/// Both algorithms draw random numbers only for timer durations, and the model checker does
+/// not model durations, so two servers that differ only in the numbers they will draw next
+/// count as one state (`docs/RESEARCH.md` §6, E6: random-number-generator state is excluded
+/// from the state).
+#[derive(Debug, Clone)]
 pub struct Rng {
     state: u64,
+}
+
+impl PartialEq for Rng {
+    fn eq(&self, _other: &Rng) -> bool {
+        true
+    }
+}
+
+impl Eq for Rng {}
+
+impl std::hash::Hash for Rng {
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {}
 }
 
 impl Rng {
@@ -60,6 +78,13 @@ mod tests {
         for _ in 0..1000 {
             assert_eq!(a.next_u64(), b.next_u64());
         }
+    }
+
+    #[test]
+    fn equality_ignores_the_position() {
+        let mut a = Rng::new(1);
+        a.next_u64();
+        assert_eq!(a, Rng::new(2));
     }
 
     #[test]

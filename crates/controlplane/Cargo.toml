@@ -10,9 +10,19 @@ publish.workspace = true
 
 [dependencies]
 consensus.workspace = true
-raft.workspace = true
 paxos.workspace = true
+postcard.workspace = true
+raft.workspace = true
 rpc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+toml.workspace = true
+tonic.workspace = true
+
+[dev-dependencies]
+client.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,181 @@
+// gRPC services of the vector store (docs/PLAN.md §3, docs/DESIGN.md §8).
+//
+// Complex payloads, such as consensus messages, control commands, and the shard map, travel
+// as bytes in the shared serde binary encoding (postcard), so both consensus algorithms and
+// every component use one encoding (docs/PLAN.md §5).
+
+syntax = "proto3";
+
+package rvs;
+
+message Empty {}
+
+// ----- Between control-plane servers -------------------------------------------------
+
+service Peer {
+  // A stream of consensus messages from one control-plane server to another.
+  rpc Stream(stream PeerFrame) returns (Empty);
+}
+
+message PeerFrame {
+  // The sending server.
+  uint64 from = 1;
+  // One consensus message.
+  bytes message = 2;
+}
+
+// ----- The control-plane API ----------------------------------------------------------
+
+service ControlPlane {
+  // Proposes a control command. Only the leader accepts it.
+  rpc Propose(ProposeRequest) returns (ProposeReply);
+  // Returns the shard map, from this server's state or after a leader-confirmed read.
+  rpc ReadShardMap(ShardMapRequest) returns (ShardMapReply);
+  // A data node's heartbeat and lease renewal (docs/DESIGN.md §5).
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatReply);
+  // The server's consensus status.
+  rpc Status(Empty) returns (StatusReply);
+  // Sets the faults and delay this server's transport injects.
+  rpc SetFaults(FaultsRequest) returns (Empty);
+  // The server's measurement log, for experiment runners.
+  rpc Events(Empty) returns (EventsReply);
+}
+
+message ProposeRequest {
+  // An encoded `rpc::Request`.
+  bytes request = 1;
+}
+
+message ProposeReply {
+  // False if this server is not the leader.
+  bool accepted = 1;
+  // The leader this server knows of, or 0, when `accepted` is false.
+  uint64 leader = 2;
+  // An encoded `rpc::Outcome`, when accepted.
+  bytes outcome = 3;
+  // The log index at which the command was applied.
+  uint64 index = 4;
+}
+
+message ShardMapRequest {
+  // Whether to confirm leadership first, so the map is not stale.
+  bool linearizable = 1;
+}
+
+message ShardMapReply {
+  // False if a linearizable read was asked of a server that is not the leader.
+  bool ok = 1;
+  // The leader this server knows of, or 0.
+  uint64 leader = 2;
+  // An encoded `rpc::ShardMap`.
+  bytes map = 3;
+}
+
+message HeartbeatRequest {
+  uint64 node = 1;
+  uint64 incarnation = 2;
+  // Where the data node serves requests.
+  string address = 3;
+  // The shard-map version the data node already has.
+  uint64 known_version = 4;
+}
+
+message HeartbeatReply {
+  // Whether the lease was granted for the heartbeat.
+  bool granted = 1;
+  // The leader this server knows of, or 0, when not granted.
+  uint64 leader = 2;
+  // An encoded `rpc::ShardMap` if it changed since `known_version`, else empty.
+  bytes map = 3;
+}
+
+message StatusReply {
+  uint64 id = 1;
+  // "follower", "candidate", or "leader".
+  string role = 2;
+  uint64 term = 3;
+  uint64 leader = 4;
+  uint64 commit_index = 5;
+  uint64 applied_index = 6;
+}
+
+message FaultsRequest {
+  // Drop consensus messages sent to these servers.
+  repeated uint64 drop_to = 1;
+  // Drop consensus messages received from these servers.
+  repeated uint64 drop_from = 2;
+  // Mean one-way delay `d` in microseconds; each message waits uniformly 0.5 d to 1.5 d.
+  uint64 delay_us = 3;
+}
+
+message EventsReply {
+  // An encoded `rpc::Events`.
+  bytes events = 1;
+}
+
+// ----- Data nodes ---------------------------------------------------------------------
+
+service DataNode {
+  // A client write to a shard's primary (docs/DESIGN.md §6.2).
+  rpc Write(WriteRequest) returns (WriteReply);
+  // A nearest-neighbor search at a shard's primary (§6.5).
+  rpc Search(SearchRequest) returns (SearchReply);
+  // A write sent from a primary to a backup (§6.2).
+  rpc Replicate(ReplicateRequest) returns (ReplicateReply);
+  // A new primary aligning a backup (§6.4).
+  rpc NewEpoch(NewEpochRequest) returns (NewEpochReply);
+  // Log chunks for a replacement replica (§6.3).
+  rpc CopyShard(CopyShardRequest) returns (CopyShardReply);
+  // The data node's measurement log, for experiment runners.
+  rpc Events(Empty) returns (EventsReply);
+}
+
+message WriteRequest {
+  // An encoded `rpc::WriteOp` with its shard and epoch.
+  bytes write = 1;
+}
+
+message WriteReply {
+  // An encoded `rpc::WriteResult`.
+  bytes result = 1;
+}
+
+message SearchRequest {
+  // An encoded `rpc::SearchQuery`.
+  bytes query = 1;
+}
+
+message SearchReply {
+  // An encoded `rpc::SearchResult`.
+  bytes result = 1;
+}
+
+message ReplicateRequest {
+  // An encoded `rpc::Replicate`.
+  bytes replicate = 1;
+}
+
+message ReplicateReply {
+  // An encoded `rpc::ReplicateAck`.
+  bytes ack = 1;
+}
+
+message NewEpochRequest {
+  // An encoded `rpc::NewEpoch`.
+  bytes new_epoch = 1;
+}
+
+message NewEpochReply {
+  // An encoded `rpc::NewEpochAck`.
+  bytes ack = 1;
+}
+
+message CopyShardRequest {
+  // An encoded `rpc::CopyShard`.
+  bytes copy = 1;
+}
+
+message CopyShardReply {
+  // An encoded `rpc::CopyShardAck`.
+  bytes ack = 1;
+}

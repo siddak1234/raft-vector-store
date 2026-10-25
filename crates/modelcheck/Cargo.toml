@@ -10,6 +10,11 @@ publish.workspace = true
 
 [dependencies]
 consensus.workspace = true
+stateright.workspace = true
+
+[dev-dependencies]
+paxos.workspace = true
+raft.workspace = true
 
 [lints]
 workspace = true
