@@ -1,0 +1,247 @@
+# E4: log recovery and catch-up (docs/RESEARCH.md §6, H3; details in amendment A5).
+# E4a: consecutive crashes with k {10, 100}. E4b: catch-up after a restart, and E4c: after
+# a partition, with n {100, 1000} committed commands. Servers {3, 5}, paper-like network,
+# 1000 seeds each.
+
+id = "E4"
+description = "Log recovery after consecutive crashes, and follower catch-up"
+
+[[run]]
+scenario = "recovery"
+label = "E4a-3s-k10"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "recovery"
+label = "E4a-3s-k10"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "recovery"
+label = "E4a-3s-k100"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "recovery"
+label = "E4a-3s-k100"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "recovery"
+label = "E4a-5s-k10"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "recovery"
+label = "E4a-5s-k10"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "recovery"
+label = "E4a-5s-k100"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "recovery"
+label = "E4a-5s-k100"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+uncommitted = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4b-3s-n100"
+algorithm = "raft"
+servers = 3
+network = "paper"
+catch_up = "restart"
+committed = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4b-3s-n100"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+catch_up = "restart"
+committed = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4b-3s-n1000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+catch_up = "restart"
+committed = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4b-3s-n1000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+catch_up = "restart"
+committed = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4b-5s-n100"
+algorithm = "raft"
+servers = 5
+network = "paper"
+catch_up = "restart"
+committed = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4b-5s-n100"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+catch_up = "restart"
+committed = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4b-5s-n1000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+catch_up = "restart"
+committed = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4b-5s-n1000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+catch_up = "restart"
+committed = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4c-3s-n100"
+algorithm = "raft"
+servers = 3
+network = "paper"
+catch_up = "partition"
+committed = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4c-3s-n100"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+catch_up = "partition"
+committed = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4c-3s-n1000"
+algorithm = "raft"
+servers = 3
+network = "paper"
+catch_up = "partition"
+committed = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4c-3s-n1000"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+catch_up = "partition"
+committed = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4c-5s-n100"
+algorithm = "raft"
+servers = 5
+network = "paper"
+catch_up = "partition"
+committed = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4c-5s-n100"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+catch_up = "partition"
+committed = 100
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4c-5s-n1000"
+algorithm = "raft"
+servers = 5
+network = "paper"
+catch_up = "partition"
+committed = 1000
+seeds = [1, 1000]
+
+[[run]]
+scenario = "catch_up"
+label = "E4c-5s-n1000"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+catch_up = "partition"
+committed = 1000
+seeds = [1, 1000]
