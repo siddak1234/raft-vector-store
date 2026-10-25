@@ -129,7 +129,7 @@ Altinbuken, *Paxos Made Moderately Complex*.
   them in a `Commit` message.
 
 The exact rules are written as a one-page summary in the style of Raft's Figure 2
-(`docs/PAXOS_SPEC.md`). It is reviewed and frozen before coding starts. After experiments
+(`docs/PAXOS_SPEC.md`). It is frozen before coding starts. After experiments
 begin, only bug fixes are allowed.
 
 ### 4.4 Control-Plane State Machine
@@ -193,8 +193,9 @@ begin, only bug fixes are allowed.
     partitions; crashes and restarts.
   - **Separate random streams:** one for the environment (fault schedule, message delays,
     workload) and one for each algorithm instance (election timeouts).
-  - **Replayable schedules:** schedules are saved to files so both algorithms replay
-    identical inputs.
+  - **Replayable schedules:** each trial's fault schedule is regenerated from its seed, in
+    its own random stream, so both algorithms face identical inputs and any trial can be
+    replayed from its seed and commit.
 - **Shared checkers:**
   - No two servers apply different commands at the same index.
   - There is at most one leader per term or ballot.
@@ -228,11 +229,12 @@ These rules make the comparison apples to apples:
    | PreVote, CheckQuorum, read leases, flexible quorums | Off |
    | Message encoding | Same serde format |
 
-3. **Frozen Paxos spec:** reviewed before coding, as described in Section 4.3.
+3. **Frozen Paxos spec:** frozen before coding, as described in Section 4.3.
 4. **Same correctness bar:**
    - Both algorithms pass the same checkers on the same seeds before any measurement.
    - A bug fix in either algorithm means rerunning every experiment for both.
-5. **Paired inputs:** for each seed, both algorithms replay the same schedule file.
+5. **Paired inputs:** for each seed, both algorithms face the same schedule, regenerated
+   from the seed.
 6. **Controlled environment:**
    - Same machine, release build, same compiler and `Cargo.lock`.
    - Fresh data directories for every run.
@@ -346,8 +348,8 @@ tagged `protocol-v1`.
 
 ### Phase 1: Simulator and Raft
 
-- [x] Simulator with delay model, fault injection, schedule files, separate random
-      streams, and message and byte accounting
+- [x] Simulator with delay model, fault injection, schedules regenerated from each seed,
+      separate random streams, and message and byte accounting
 - [x] Shared and Raft-specific checkers
 - [x] Raft: election, replication, commit rule, no-op, persistence, restart
 - [x] A/A validation of the harness
@@ -378,9 +380,12 @@ algorithms.
       server
 - [ ] Fault-injection and delay-injection admin commands
 - [ ] `cargo xtask cluster` for 1, 3, and 5 servers; structured logs; metrics export
+- [ ] Real-cluster A/A test and real-cluster E2 at 150–300 ms, deferred to this phase by
+      `docs/RESEARCH.md` amendments A1.6 and A1.9
 
 **Exit:** for both algorithms, writes resume after a `kill -9` of the leader, and a
-restarted server catches up.
+restarted server catches up. The real-cluster A/A test passes, and the real-cluster E2
+results are recorded.
 
 ### Phase 4: Vector Store Data Plane
 
@@ -393,15 +398,28 @@ restarted server catches up.
   - in-sync set rules, minimum in-sync size, promotion
   - discarding unacknowledged writes on promotion
   - re-replication
+- [ ] **Checks**, run against logs that every data node and client writes:
+  - at most one data node serves each shard as primary at any moment (`docs/DESIGN.md`
+    C1), comparing serving intervals on the machine's shared clock
+  - no acknowledged write is lost (C2)
+- [ ] **Partition tests:**
+  - the control-plane leader is cut off with a minority while data nodes still send it
+    heartbeats
+  - a shard's primary is cut off from the control-plane leader
 
 **Exit:**
 
 - Search results match the dataset's ground truth.
 - Under both algorithms, killing any one data node loses no acknowledged write.
 - The shard keeps accepting writes, and re-replication restores 3 copies.
+- In every test, including the partition tests, the single-primary and no-lost-write checks
+  pass.
 
 ### Phase 5: Experiments
 
+- [ ] The commit used for data collection is tagged `data-v1`. After that, only bug fixes
+      are allowed (Section 4.3); a fix is tagged `data-v2`, and so on, and every
+      experiment is rerun for both algorithms (Section 5, rule 4)
 - [ ] E1–E8 run as specified in `docs/RESEARCH.md`
 - [ ] Raw results, configs, and seeds stored in `experiments/`
 
@@ -451,8 +469,10 @@ true top-100 neighbors for each query, in HDF5 format.
 
 | Use | Dataset | Size | Distance |
 |---|---|---|---|
-| Development | GloVe-25 | 1,183,514 × 25 (121 MB) | Angular |
-| Evaluation | SIFT | 1,000,000 × 128 (501 MB) | Euclidean |
+| Development and experiment E8 (`docs/RESEARCH.md` §6) | GloVe-25 | 1,183,514 × 25 (121 MB) | Angular |
+| Second search-correctness check at the Phase 4 exit | SIFT | 1,000,000 × 128 (501 MB) | Euclidean |
+
+Datasets are downloaded outside the repository with `cargo xtask dataset`.
 
 Brute-force search returns exact neighbors, so results must match the ground truth
 exactly. This checks that routing and the top-k merge are correct. The dataset does not

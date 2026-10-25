@@ -456,6 +456,20 @@ mean.
 - The comparison experiments (E1, E3–E5) use 150–300 ms timeouts, where the requirement
   holds, so they are unaffected.
 
+
+### A3. 2026-10-24: Status, the data-collection tag, and checks during E8
+
+1. **Status.** The status line at the top was written before the freeze and was not
+   updated. This document has been frozen since the tag `protocol-v1`.
+2. **The data-collection tag.** "The commit tagged for data collection" (E7) is the commit
+   tagged `data-v1`. A bug fix after data collection begins is tagged `data-v2`, and so
+   on. By §10, every experiment is then rerun for both algorithms, and E7 uses the latest
+   such tag.
+3. **Checks during E8.** Every E8 trial also runs two checks over logs that the data nodes
+   and clients write: at most one data node serves each shard as primary at any moment
+   (`docs/DESIGN.md` C1), and no acknowledged write is lost (C2). A violation of either
+   is a safety violation under §10.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

@@ -256,6 +256,12 @@ Multi-Paxos data was collected.
    removed. With IDs `1..=N`, the server with ID `r + 1` owns the terms `t` with
    `t mod N = r`.
 
+
+### A3. 2026-10-24: Status
+
+The status line at the top was written before the freeze and was not updated. This
+specification has been frozen since the tag `protocol-v1`.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

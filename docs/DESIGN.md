@@ -1,7 +1,8 @@
 # Data Plane Design: Leases and Replication
 
-**Status:** draft for review. This document is not part of the frozen protocol, because the
-data plane does not affect RQ1–RQ5. Changes go through pull request review like code.
+**Status:** working design. This document is not part of the frozen protocol, because the
+data plane does not affect RQ1–RQ5. It changes like code: commit the change to `main` with
+the reason in the commit message.
 
 ## 1. Scope
 

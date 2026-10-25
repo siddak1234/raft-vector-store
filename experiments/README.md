@@ -4,7 +4,7 @@ Definitions and raw results for the experiments in `docs/PLAN.md` §7.
 
 ## `configs/`
 
-One file per experiment, such as `E2.toml`, reviewed like code. Each config lists runs:
+One file per experiment, such as `E2.toml`, versioned like code. Each config lists runs:
 a scenario (`steady`, `figure16`, or `failover`), the algorithm, the cluster size, the
 network, the seed range, and the scenario's settings. `cargo xtask experiment <id>` runs
 `configs/<id>.toml`.

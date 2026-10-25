@@ -19,7 +19,7 @@ and CI runs it on every push to `main`.
 |---|---|
 | `crates/` | All system code, one folder per crate (see `docs/PLAN.md` §9) |
 | `xtask/` | Project commands, run as `cargo xtask <command>` |
-| `experiments/configs/` | Experiment definitions, reviewed like code |
+| `experiments/configs/` | Experiment definitions, versioned like code |
 | `experiments/results/` | Raw results, written only by the experiment runner |
 | `analysis/` | Python statistics and figures |
 | `docs/` | Plan, research protocol, specifications, bug log |
@@ -40,8 +40,7 @@ used only in `analysis/`.
 - `main` cannot be force-pushed or deleted, so published history is never rewritten.
 - Pull `main` before starting work (`git pull --ff-only`) so commits stay in a straight
   line.
-- A branch and pull request are optional, for a change you want the other person to look
-  at first.
+- The project does not use branches or pull requests.
 
 ## Commit messages
 

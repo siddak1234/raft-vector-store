@@ -10,7 +10,7 @@ repository = "https://github.com/siddak1234/raft-vector-store"
 publish = false
 
 # Every dependency version is declared once here. Crates refer to an entry with
-# `name.workspace = true`. Add a dependency in the pull request that first uses it.
+# `name.workspace = true`. Add a dependency in the commit that first uses it.
 [workspace.dependencies]
 # Workspace crates. `bench` and `xtask` are not listed because no crate may depend on them.
 client = { path = "crates/client" }
