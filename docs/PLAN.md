@@ -459,15 +459,21 @@ results in `docs/RESULTS.md`).
       data collection is fixed at `data-v2` (`docs/RESEARCH.md` amendment A7),
       measurements added before any run at `data-v2` are tagged `data-v3` (amendment A8),
       and an analysis fix made before any run at `data-v3` is tagged `data-v4` (A9)
-- [ ] E1–E8 run as specified in `docs/RESEARCH.md` §6 and amendments A3–A9, with the
+- [x] E1–E8 run as specified in `docs/RESEARCH.md` §6 and amendments A3–A9, with the
       exploratory E1-load (A8), at `data-v4` (A9), after the validation campaign and both
       A/A tests are rerun (A7). E7 needs `rust-code-analysis-cli`
       (`cargo install rust-code-analysis-cli`)
-- [ ] Raw results, configs, and seeds stored in `experiments/`, each experiment's results
+- [x] Raw results, configs, and seeds stored in `experiments/`, each experiment's results
       committed before the next run starts
 
 **Exit:** every configuration has reached its planned sample size, with zero safety
 violations in any run.
+
+**Status:** done. Every run at `data-v4`, the validation campaigns and both A/A tests first,
+reached its planned sample size with zero safety violations, and both A/A tests passed.
+H3 is supported; H1 and H6 are not; H2a is supported for Multi-Paxos but not for Raft; H4
+is partly supported; and, as H5 expects, Raft has fewer message types and lower code
+complexity. Results are in `docs/RESULTS.md`.
 
 ### Phase 6: Analysis and Report
 
