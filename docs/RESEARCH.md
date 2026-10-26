@@ -701,6 +701,34 @@ experiments, `crates/`, the experiment commands of `xtask`, `Cargo.lock`, and
 `experiments/configs/`, is the same as at `data-v3`. Every run that amendments A7 and A8
 list is made at `data-v4`, from commits whose code equals it. No run was made at `data-v3`.
 
+### A10. 2026-10-26: Re-sent entries counted from the election; AA, E3, and E4 rerun
+
+**Outcome.** In the Phase 6 analysis, E3's median M10 for Multi-Paxos at k = 10 was 0. The
+cause was a measurement bug (`docs/BUGLOG.md`). M10 counted a new leader's entries only
+after the input in which it became leader, while §5 defines it from the election. A new
+leader sends its first messages in that input, Multi-Paxos's re-proposals among them, so
+M10 left them out for both algorithms, in the simulator and on the real cluster. H3's
+direction does not depend on it; the reported sizes do.
+
+**Fix.** M10 counts from the input that elects the leader. The fix changes the M10
+computation of E3 and E4a, on both environments, and the shared function that finds the
+new leader, which only the failover and recovery procedures call.
+
+**Decision.** The fix is tagged `data-v5`. The runs that use the changed code are rerun at
+`data-v5`: the simulator A/A test, whose E3 part reports M10 and gates the A/B runs, then
+E3 and E4. Their `data-v4` runs stay in the repository and are superseded. Every other run
+is kept at `data-v4`, departing from A3.2's rule that every experiment is rerun after a bug
+fix, because the fix cannot change them:
+
+1. Only the AA, E3, and E4 configs run the failover or recovery procedure.
+2. With the fix, the first 50 seeds of every other simulator run (both validation
+   campaigns, E1, E2, E2-lan, and E5) and E6's smallest rung reproduced their `data-v4`
+   rows exactly, as did the steady-state part of the A/A test.
+3. On the real cluster the change is confined to E3's M10.
+
+Before the fix was tagged, a scratch rerun of E3 and E4a on seeds 1–200 reproduced every
+`data-v4` value except M10.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

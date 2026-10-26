@@ -1,4 +1,4 @@
-"""E1 and E1-load summaries (e1.py, e1_load.py) on small, hand-made results."""
+"""E1, E1-load, and E6 summaries (e1.py, e1_load.py, e6.py) on small, hand-made results."""
 
 import math
 
@@ -6,6 +6,7 @@ import pandas as pd
 
 import e1
 import e1_load
+import e6
 
 
 def test_descriptive_measures_skip_columns_the_results_do_not_have():
@@ -37,3 +38,12 @@ def test_a_rate_is_sustained_only_without_late_commands():
     assert not table.loc[8000, "sustained"]
     # Empty percentiles fell among late commands, so the median across trials is unbounded.
     assert math.isinf(table.loc[8000, "median ms"])
+
+
+def test_e6_labels_skipped_searches_apart_from_those_that_ran():
+    rows = pd.DataFrame([
+        {"complete": True, "generated": 219_455_251},
+        {"complete": False, "generated": 1_200_054_459},
+        {"complete": False, "generated": 0},
+    ])
+    assert [e6.outcome(row) for _, row in rows.iterrows()] == ["complete", "budget reached", "skipped"]

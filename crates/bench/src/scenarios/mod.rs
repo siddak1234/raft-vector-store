@@ -374,6 +374,50 @@ fn leader_ready<C: Consensus, O: Observer<C>>(sim: &Simulation<C, O>) -> bool {
             == Some(term)
 }
 
+/// A leader elected after a fault, with the entries it had sent before the input in which
+/// it became leader.
+pub(crate) struct Elected {
+    pub(crate) leader: NodeId,
+    pub(crate) term: Term,
+    /// Metric M10 counts from the election, so the entries a new leader sends in the input
+    /// that elects it, such as Multi-Paxos's re-proposals, count.
+    pub(crate) entries_before: u64,
+}
+
+/// Runs until a server leads a term above `term`, calling `on_step` after every event.
+/// Returns `None` if no server does by `deadline`.
+fn elect<C: Consensus, O: Observer<C>>(
+    sim: &mut Simulation<C, O>,
+    deadline: sim::SimTime,
+    term: Term,
+    mut on_step: impl FnMut(&Simulation<C, O>),
+) -> Option<Elected> {
+    let mut sent: std::collections::BTreeMap<NodeId, u64> = std::collections::BTreeMap::new();
+    let elected = sim.run_until_condition(deadline, |s| {
+        on_step(s);
+        if s.leader().is_some_and(|(_, t)| t > term) {
+            return true;
+        }
+        for &id in s.ids() {
+            sent.insert(id, s.metrics().sent_by(id).entries);
+        }
+        false
+    });
+    if !elected {
+        return None;
+    }
+    let (leader, term) = sim.leader()?;
+    let entries_before = sent
+        .get(&leader)
+        .copied()
+        .unwrap_or_else(|| sim.metrics().sent_by(leader).entries);
+    Some(Elected {
+        leader,
+        term,
+        entries_before,
+    })
+}
+
 /// Adds the term of every current candidate to `terms` (metric M3).
 fn record_candidates<C: Consensus, O: Observer<C>>(
     sim: &Simulation<C, O>,

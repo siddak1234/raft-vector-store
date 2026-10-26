@@ -14,6 +14,15 @@ from compare import algorithms, show
 from results import describe, latest, load
 
 
+def outcome(search: pd.Series) -> str:
+    """A search completed, stopped at its budget, or was skipped (amendment A5.4) because a
+    smaller rung did not complete. A skipped search generated no state, so its safety
+    columns say nothing."""
+    if search["complete"]:
+        return "complete"
+    return "skipped" if search["generated"] == 0 else "budget reached"
+
+
 def counters() -> pd.DataFrame:
     frames = []
     for experiment, name in [("E3", "failover.csv"), ("E4", "recovery.csv"), ("E5", "partition.csv")]:
@@ -36,8 +45,8 @@ def main() -> int:
         print("E6: no results yet (run `cargo xtask experiment E6`)")
         return 0
     print(f"E6 results: {describe(folder)}")
-    searches = load(folder, "modelcheck.csv")
-    columns = ["label", "algorithm", "complete", "states", "search_states", "generated", "max_depth",
+    searches = load(folder, "modelcheck.csv").assign(outcome=lambda f: f.apply(outcome, axis=1))
+    columns = ["label", "algorithm", "outcome", "states", "search_states", "generated", "max_depth",
                "seconds", "election_safety", "state_machine_safety", "command_committed"]
     print(searches[columns].to_string(index=False))
     complete = searches[searches["complete"]]
@@ -48,8 +57,10 @@ def main() -> int:
             paxos = int(group.loc[group["algorithm"] == "paxos", "states"].iloc[0])
             fewer = "Raft fewer" if raft < paxos else ("equal" if raft == paxos else "Multi-Paxos fewer")
             print(f"  {label}: Raft {raft:,}, Multi-Paxos {paxos:,} ({paxos / raft:.3f} x): {fewer}")
-    unsafe = searches[~(searches["election_safety"] & searches["state_machine_safety"])]
-    print(f"\nSearches with a safety violation: {len(unsafe)}")
+    ran = searches[searches["outcome"] != "skipped"]
+    unsafe = ran[~(ran["election_safety"] & ran["state_machine_safety"])]
+    print(f"\nSearches with a safety violation: {len(unsafe)} of {len(ran)} that ran "
+          f"({len(searches) - len(ran)} skipped, amendment A5.4)")
 
     frame = counters()
     if frame.empty:

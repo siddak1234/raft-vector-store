@@ -634,10 +634,21 @@ pub async fn failover(run: &RunConfig, seed: u64) -> FailoverRow {
                 .map(|s| s.time)
                 .min();
             if let Some(committed) = committed {
+                // A server logs the messages of an input before the status change it causes,
+                // so the messages it sent in the input that elected it are logged just before
+                // `elected`. A candidate sends no entries, so counting from its previous status
+                // change adds exactly those messages.
+                let opened = new_leader
+                    .status
+                    .iter()
+                    .filter(|s| s.time < elected)
+                    .map(|s| s.time)
+                    .max()
+                    .unwrap_or(elected);
                 let entries = new_leader
                     .sends
                     .iter()
-                    .filter(|s| s.time >= elected && s.time <= committed)
+                    .filter(|s| s.time >= opened && s.time <= committed)
                     .map(|s| s.entries)
                     .sum();
                 row.resent_entries = Some(entries);

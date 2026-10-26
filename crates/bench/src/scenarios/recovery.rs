@@ -19,7 +19,10 @@ use consensus::{LogIndex, NodeId, Storage};
 use serde::Deserialize;
 use sim::{DropRule, Fault, SimTime, Simulation, Stream, stream_rng};
 
-use super::{RUN_HEADER, ms, optional, run_columns, shuffled_followers, sim_config, start_ready};
+use super::{
+    Elected, RUN_HEADER, elect, ms, optional, run_columns, shuffled_followers, sim_config,
+    start_ready,
+};
 use crate::algorithm::Algorithm;
 use crate::config::RunConfig;
 use crate::results::Row;
@@ -129,14 +132,13 @@ fn crash_with_entries<A: Algorithm>(
     sim.inject(Fault::Crash(leader));
 }
 
-/// Runs until a server leads a term above `term`; returns it, or `None` at the cap.
+/// Runs until a server leads a term above `term`, or returns `None` at the cap.
 fn next_leader<A: Algorithm>(
     sim: &mut Simulation<A, A::Observer>,
     term: consensus::Term,
-) -> Option<(NodeId, consensus::Term)> {
+) -> Option<Elected> {
     let deadline = sim.now() + CAP;
-    let elected = sim.run_until_condition(deadline, |s| s.leader().is_some_and(|(_, t)| t > term));
-    if elected { sim.leader() } else { None }
+    elect(sim, deadline, term, |_| {})
 }
 
 /// E4a: consecutive crashes.
@@ -161,7 +163,12 @@ pub fn consecutive<A: Algorithm>(run: &RunConfig, seed: u64) -> RecoveryRow {
     let followers = shuffled_followers(sim.ids(), first, &mut rng);
     let reached = rng.below(servers as u64) as usize;
     crash_with_entries(&mut sim, first, &followers, reached, run.uncommitted);
-    let Some((second, second_term)) = next_leader(&mut sim, term) else {
+    let Some(Elected {
+        leader: second,
+        term: second_term,
+        ..
+    }) = next_leader(&mut sim, term)
+    else {
         row.censored = true;
         row.finish(&sim);
         return row;
@@ -174,16 +181,20 @@ pub fn consecutive<A: Algorithm>(run: &RunConfig, seed: u64) -> RecoveryRow {
     let reached = rng.below(quorum as u64 - 1) as usize;
     crash_with_entries(&mut sim, second, &followers, reached, run.uncommitted);
     sim.clear_drop_rules();
-    let Some((third, third_term)) = next_leader(&mut sim, second_term) else {
+    let Some(Elected {
+        leader: third,
+        term: third_term,
+        entries_before: before,
+    }) = next_leader(&mut sim, second_term)
+    else {
         row.censored = true;
         row.finish(&sim);
         return row;
     };
 
-    // M10 for the third leader: entries sent until its no-op, the last entry in its log at
-    // election, is committed.
+    // M10 for the third leader: entries sent from its election until its no-op, the last
+    // entry in its log at election, is committed.
     let noop = sim.storage(third).last_index();
-    let before = sim.metrics().sent_by(third).entries;
     let committed = sim.run_until_condition(sim.now() + CAP, |s| {
         s.status(third)
             .is_none_or(|st| st.term != third_term || st.commit_index >= noop)

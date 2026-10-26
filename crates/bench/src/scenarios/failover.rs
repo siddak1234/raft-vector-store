@@ -25,8 +25,8 @@ use consensus::Storage;
 use sim::{DropRule, Fault, Stream, stream_rng};
 
 use super::{
-    RUN_HEADER, ms, optional, record_candidates, run_columns, shuffled_followers, sim_config,
-    start_ready,
+    RUN_HEADER, elect, ms, optional, record_candidates, run_columns, shuffled_followers,
+    sim_config, start_ready,
 };
 use crate::algorithm::Algorithm;
 use crate::config::RunConfig;
@@ -151,27 +151,27 @@ pub fn trial<A: Algorithm>(run: &RunConfig, seed: u64) -> FailoverRow {
 
     // M1, M3, M4, M5: until a server leads a higher term.
     let mut candidate_terms = BTreeSet::new();
-    let elected = sim.run_until_condition(crashed + CAP, |s| {
+    let elected = elect(&mut sim, crashed + CAP, term, |s| {
         record_candidates(s, &mut candidate_terms);
-        s.leader().is_some_and(|(_, t)| t > term)
     });
     row.election_rounds = candidate_terms.len();
     row.time_without_leader_ms = ms(sim.now() - crashed);
-    if !elected {
+    let Some(elected) = elected else {
         row.censored = true;
         row.violations = sim.violation_count();
         return row;
-    }
+    };
     let election = sim.metrics().since(&before);
     row.election_messages = election.sent.messages;
     row.election_bytes = election.sent.bytes;
     row.stale_log_rejections = A::stale_log_rejections(sim.observer());
 
-    // M10: entries the new leader sends until its no-op is committed. The no-op is the last
-    // entry in the new leader's log at the moment it is elected, for both algorithms.
-    let (new_leader, new_term) = sim.leader().expect("just elected");
+    // M10: entries the new leader sends from its election until its no-op is committed. The
+    // no-op is the last entry in the new leader's log at the moment it is elected, for both
+    // algorithms.
+    let (new_leader, new_term) = (elected.leader, elected.term);
     let noop = sim.storage(new_leader).last_index();
-    let sent_before = sim.metrics().sent_by(new_leader).entries;
+    let sent_before = elected.entries_before;
     let committed = sim.run_until_condition(crashed + CAP, |s| {
         s.status(new_leader)
             .is_none_or(|st| st.term != new_term || st.commit_index >= noop)
@@ -196,4 +196,42 @@ pub fn trial<A: Algorithm>(run: &RunConfig, seed: u64) -> FailoverRow {
     row.entries_to_leaders = sim.metrics().entries_to_leaders;
     row.violations = sim.violation_count();
     row
+}
+
+#[cfg(test)]
+mod tests {
+    use paxos::Paxos;
+    use raft::Raft;
+
+    use crate::config::{NetworkKind, RunConfig, Scenario};
+
+    fn run(algorithm: &str) -> RunConfig {
+        let text = format!(
+            "scenario = \"failover\"\nlabel = \"3s-k0\"\nalgorithm = \"{algorithm}\"\nservers = 3\n\
+             network = \"paper\"\nclients = 4\nuncommitted = 0\nseeds = [1, 5]\n"
+        );
+        let run: RunConfig = toml::from_str(&text).expect("valid run");
+        assert_eq!(
+            (run.scenario, run.network),
+            (Scenario::Failover, Some(NetworkKind::Paper))
+        );
+        run
+    }
+
+    /// A new leader sends its no-op to each follower in the input that elects it, so M10
+    /// counts at least one entry per follower. Counting only after that input reported 0.
+    #[test]
+    fn re_sent_entries_count_the_messages_sent_at_election() {
+        for seed in 1..=5 {
+            for resent in [
+                super::trial::<Raft>(&run("raft"), seed).resent_entries,
+                super::trial::<Paxos>(&run("paxos"), seed).resent_entries,
+            ] {
+                assert!(
+                    resent.is_some_and(|n| n >= 2),
+                    "seed {seed}: M10 {resent:?}"
+                );
+            }
+        }
+    }
 }
