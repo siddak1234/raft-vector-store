@@ -4,8 +4,8 @@ title: Raft vs. Multi-Paxos on a Vector Store Control Plane
 paginate: true
 ---
 
-<!-- Status: complete. Results are from the Phase 5 runs at data-v4 and the reruns at data-v5
-(docs/RESEARCH.md amendments A7-A10). -->
+<!-- Status: complete. Every number comes from docs/RESULTS.md, and every figure from
+cargo xtask figures (docs/figures/). -->
 
 # Raft vs. Multi-Paxos on a Vector Store Control Plane
 
@@ -121,10 +121,10 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
   backlog moved one batch per round trip, not up to the 1,024-entry window.
 - Raft needed about **16 round trips** to catch a follower up on 1,000 entries.
 - Every checker passed: the bug cost only time.
-- Protocol rule: fix, tag `data-v2`, **rerun everything** for both algorithms. The
-  superseded run is kept and reported.
+- Protocol rule: fix it and **rerun everything** for both algorithms. The superseded run
+  is kept and reported.
 - The analysis later found a miscounted metric (re-sent entries); the three runs that
-  measure it were rerun at `data-v5`.
+  measure it were rerun.
 
 ---
 
@@ -134,6 +134,25 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 - A/A tests (Raft against Raft) pass in the simulator and on the real cluster.
 - Figure 16: R1 passes; R2 fails at the shortest timeouts on the paper-like network
   (round trips exceed the timeouts), and holds on the LAN-like network.
+- R1 rests on censored trials: at 150–150 ms, 55% elected no leader within 60 s. Without
+  them (the pre-registered sensitivity analysis), R1 fails.
+
+---
+
+## Results at a glance
+
+| Measure | Better |
+|---|---|
+| Speed, 1 or 64 commands in flight | neither (within ±5%) |
+| Speed, 4–16 in flight | Multi-Paxos, up to 11% |
+| Latency under a fixed load | Raft, by 1.1–4.8 ms, up to its limit |
+| Highest sustained load; stalls | Multi-Paxos: ≥ 10,000/s against 6,000–8,000; 4 stalled trials against 44 |
+| Storage syncs; CPU per commit (16 clients, under load) | Raft |
+| Network bytes per commit | Multi-Paxos with 4+ in flight (Raft 2.7–5.6× at 16+) |
+| Time without a leader | Multi-Paxos, 2–11% sooner |
+| Flapping link; re-sent entries | Raft: 1–2 leader changes against 15; 15–64× fewer entries |
+| Safety; shard recovery | neither: no violations; 3.4–5.6 s under both |
+| Log gaps; code size | Raft |
 
 ---
 
@@ -143,13 +162,35 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 |---|---|
 | 1 | neither |
 | 4–16 | Multi-Paxos: at 16 clients, 7–10% lower latency and 8–11% higher throughput (simulator) |
-| 64 or more | Raft |
+| 64 | neither: Raft 3% faster on 3 servers, Multi-Paxos 1% on 5 |
+| ~100 or more (load sweep) | Raft, until it stops keeping up |
 
 - Every message has its own delay, so messages arrive out of order. Raft followers reject
   an `AppendEntries` whose predecessor is missing: about once per commit at 16 clients.
-- With more in flight, each resend carries more entries (1.0 → 7.6), and Raft wins.
-- Load sweep: Raft keeps up to 8,000 (3 servers) and 6,000 (5) commands per s;
-  Multi-Paxos to at least 10,000.
+- Load sweep: Raft keeps up with 8,000 (3 servers) and 6,000 (5) commands per s;
+  Multi-Paxos with at least 10,000. Raft stalled in 44 of 360 trials, Multi-Paxos in 4.
+
+---
+
+## RQ1: latency and throughput
+
+![w:1150](figures/E1_speed.png)
+
+---
+
+## RQ1: what each commit costs
+
+- **Storage:** Raft 1.2–2.3 syncs per commit at 16+ clients, Multi-Paxos 3.0–5.1.
+- **CPU** (real cluster, 16 clients): Multi-Paxos 4–27% more per commit.
+- **Network:** Raft 2.7–5.6× the bytes at 16+ clients; Multi-Paxos 2–21% more at 1.
+
+![w:1000](figures/E1_cost.png)
+
+---
+
+## RQ1: under a fixed offered load (exploratory)
+
+![w:820](figures/E1_load.png)
 
 ---
 
@@ -168,6 +209,15 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 
 ---
 
+## RQ2: time without a leader
+
+![w:1150](figures/E3_time_without_leader_ms.png)
+
+Raft's tail is longer: more than one election round in 31–39% of failovers, against
+10–18% for Multi-Paxos.
+
+---
+
 ## RQ3: Re-sent entries and catch-up, H3 supported
 
 | | Raft | Multi-Paxos |
@@ -180,6 +230,12 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
   every committed entry; a Multi-Paxos leader re-proposes everything it inherits.
 - A Raft leader pipelines up to 1,024 entries to a matching follower; Multi-Paxos sends
   missing chosen entries 64 at a time, one message unanswered.
+
+---
+
+## RQ3: re-sent entries and catch-up
+
+![w:1150](figures/E4_recovery.png)
 
 ---
 
@@ -211,6 +267,8 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 - Data node alone: intervals too wide for equivalence. With the control-plane leader: no
   difference detected (medians within 0.3%).
 
+![w:1000](figures/E8_recovery.png)
+
 ---
 
 ## Demo: live failover
@@ -230,6 +288,8 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 - **Our** Multi-Paxos variant, built close to Raft; optimizations off in both.
 - Same two authors; Raft written first.
 - Simulator and localhost, not real networks; one machine, one SSD; `fsync(2)`.
+- E1–E5 send a 128-byte command that changes nothing; CPU and memory measured only in
+  steady state and the load sweep.
 - Code complexity stands in for understandability.
 - Exploratory analyses are labeled and never decide a hypothesis.
 
@@ -238,7 +298,9 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 ## Conclusion
 
 - **Efficiency:** equivalent with 1, 4, and 64 commands in flight; Multi-Paxos up to 11%
-  faster with 16, on a network that reorders messages.
+  faster with 16, on a network that reorders messages. Raft syncs storage less often and
+  uses less CPU per commit under load, but with many commands in flight sends far more
+  bytes, and it stops keeping up sooner.
 - **Leader failure:** Raft re-sends far fewer entries; Multi-Paxos elects 2–11% sooner;
   Raft's election restriction keeps it stable on a flapping link.
 - **Coherency:** Raft's logs never have gaps; at the one bound both searches completed,

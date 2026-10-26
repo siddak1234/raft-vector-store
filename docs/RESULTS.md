@@ -393,7 +393,15 @@ synced per commit are within 2% on the LAN-like network and 15–19% higher for 
 on the paper-like one. On the real cluster with 16 clients, Multi-Paxos's median CPU time
 per commit was 4–27% higher than Raft's (ratios 1.04–1.27; the interval for 3 servers on
 the paper-like network includes 1), and peak memory per server was 8.5–34 MB for both,
-with no consistent direction.
+with no consistent direction. With 1 client Raft synced exactly once per server per commit
+in both environments, and Multi-Paxos up to 1.17 times per server in the simulator (3.42
+and 5.83) and 1.21 on the real cluster (3.51 and 6.05); its CPU time per commit was 1–4%
+higher (ratios 1.01–1.04), but every interval includes 1, and peak memory was 5.4–8.4 MB
+for both.
+
+Median throughput across the simulator's 3- and 5-server configurations ranged from 34 to
+32,195 commits per second, from 1 client on the paper-like network to 64 on the LAN-like
+one.
 
 ### E1-load: latency against offered load (exploratory)
 
@@ -408,8 +416,8 @@ trials at each rate:
 | 5 | Multi-Paxos | 10,000 per s (the highest tested) | 51.4–57.1 ms | — |
 
 Raft had the lower CPU time per commit at every rate it sustained, and the lower median
-latency from 2,000 per s up to its limit; at 1,000 per s Multi-Paxos's was lower by about
-1 ms. Multi-Paxos kept up at every tested rate, with its median latency rising to
+latency from 2,000 per s up to its limit, by 1.1–4.8 ms; at 1,000 per s Multi-Paxos's was
+lower by 0.2 ms on 3 servers and 1.0 ms on 5. Multi-Paxos kept up at every tested rate, with its median latency rising to
 227–231 ms on 5 servers at 8,000–10,000 per s. Past its limit, Raft's throughput fell far
 below the offered rate instead of leveling off.
 

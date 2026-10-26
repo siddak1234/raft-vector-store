@@ -494,6 +494,9 @@ A10 records the fix, tagged `data-v5`, and the reruns of the simulator A/A test,
 E4. Exploratory analyses, each on a scratch copy that reproduced the official values,
 explain the results that the pre-registered metrics left open. The report, slides, and
 `docs/RESULTS.md` give every result, and `cargo xtask figures` regenerates every figure.
+After Phase 6, the effect sizes and the E2 sensitivity analysis that `docs/RESEARCH.md` §8
+specifies, which the analysis lacked, were added, along with figures of every experiment
+in the report and slides.
 
 ## 9. Repository Layout
 
