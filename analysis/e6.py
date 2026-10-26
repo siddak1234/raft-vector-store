@@ -40,8 +40,6 @@ def counters() -> pd.DataFrame:
 def main() -> int:
     folder = latest("E6")
     if folder is None:
-        folder = latest("E6-check")
-    if folder is None:
         print("E6: no results yet (run `cargo xtask experiment E6`)")
         return 0
     print(f"E6 results: {describe(folder)}")

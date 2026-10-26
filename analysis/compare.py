@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from stats import holm, mann_whitney, ratio_of_medians, wilcoxon
+from stats import effect_size, holm, mann_whitney, ratio_of_medians, wilcoxon
 
 
 def paired(frame: pd.DataFrame, column: str, a_mask, b_mask) -> tuple[np.ndarray, np.ndarray]:
@@ -16,8 +16,10 @@ def paired(frame: pd.DataFrame, column: str, a_mask, b_mask) -> tuple[np.ndarray
 
 def algorithms(frame: pd.DataFrame, keys: list[str], metrics: list[tuple[str, str]], is_paired: bool,
                alternative: str = "two-sided") -> pd.DataFrame:
-    """Multi-Paxos against Raft for each configuration and metric, Holm-corrected. A
-    configuration without data gets NaN for its p-value and is left out of the correction."""
+    """Multi-Paxos against Raft for each configuration and metric, Holm-corrected, with the
+    effect size: Multi-Paxos minus Raft, as the median of paired differences or the
+    difference of medians, with its 95% bootstrap interval. A configuration without data
+    gets NaN for its p-value and is left out of the correction."""
     rows = []
     for config, group in frame.groupby(keys):
         config = config if isinstance(config, tuple) else (config,)
@@ -30,6 +32,7 @@ def algorithms(frame: pd.DataFrame, keys: list[str], metrics: list[tuple[str, st
                 b = group.loc[group["algorithm"] == "paxos", column].dropna().to_numpy(float)
                 p = mann_whitney(a, b)
             ratio, low, high = ratio_of_medians(a, b, paired=is_paired)
+            effect, effect_low, effect_high = effect_size(a, b, paired=is_paired)
             row = dict(zip(keys, config))
             row.update({
                 "metric": name,
@@ -38,6 +41,8 @@ def algorithms(frame: pd.DataFrame, keys: list[str], metrics: list[tuple[str, st
                 "paxos median": float(np.median(b)) if len(b) else np.nan,
                 "paxos/raft": ratio,
                 "90% CI": "n/a" if np.isnan(low) else f"[{low:.3f}, {high:.3f}]",
+                "paxos-raft": effect,
+                "95% CI": interval(effect_low, effect_high),
                 "p": p,
             })
             rows.append(row)
@@ -45,6 +50,11 @@ def algorithms(frame: pd.DataFrame, keys: list[str], metrics: list[tuple[str, st
     if len(table):
         table["p (Holm)"] = holm(table["p"].tolist())
     return table
+
+
+def interval(low: float, high: float) -> str:
+    """An effect-size interval for printing, or "n/a" without data."""
+    return "n/a" if np.isnan(low) else f"[{low:.4g}, {high:.4g}]"
 
 
 def show(title: str, table: pd.DataFrame) -> None:

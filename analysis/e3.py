@@ -3,9 +3,11 @@
 - H2a: Multi-Paxos election traffic (M4 bytes) at k = 1000 exceeds k = 0 (one-sided
   Wilcoxon signed-rank, paired by seed), while Raft's at k = 1000 is equivalent to k = 0
   (ratio of medians within [0.95, 1.05]).
-- H2b: time without a leader (M1) and unavailability (M2) differ between the algorithms
-  (two-sided tests, Holm-corrected across configurations).
-- M10, re-sent entries, is reported here and tested one-sided in E4 (H3).
+- H2b: time without a leader (M1) and unavailability (M2) differ between the algorithms.
+- Every metric below, M1 and M2 among them, is compared two-sided in every configuration
+  (cluster size and k), in one Holm family per environment. On the real cluster the
+  comparison covers M1-M4 and M10.
+- M10, re-sent entries, is also tested one-sided in E4 (H3).
 """
 
 import sys
@@ -16,9 +18,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from compare import algorithms, cdf, paired, show  # noqa: E402
+from compare import algorithms, cdf, interval, paired, show  # noqa: E402
 from results import describe, figure_path, latest, load  # noqa: E402
-from stats import ALPHA, equivalent, holm, ratio_of_medians, wilcoxon  # noqa: E402
+from stats import ALPHA, effect_size, equivalent, holm, ratio_of_medians, wilcoxon  # noqa: E402
 
 METRICS = [
     ("time_without_leader_ms", "M1 time without leader (ms)"),
@@ -41,13 +43,14 @@ def h2a(frame) -> None:
             group = frame[(frame["servers"] == servers) & (frame["algorithm"] == algorithm)]
             a, b = paired(group, "election_bytes", group["uncommitted"] == 0, group["uncommitted"] == 1000)
             ratio, low, high = ratio_of_medians(a, b, paired=True)
+            effect = effect_size(a, b, paired=True)
             alternative = "greater" if algorithm == "paxos" else "two-sided"
             m0 = float(np.median(a)) if len(a) else float("nan")
             m1 = float(np.median(b)) if len(b) else float("nan")
-            rows.append((servers, algorithm, len(a), m0, m1, ratio, low, high,
+            rows.append((servers, algorithm, len(a), m0, m1, ratio, low, high, effect,
                          wilcoxon(a, b, alternative=alternative)))
-    adjusted = holm([r[8] for r in rows])
-    for (servers, algorithm, n, m0, m1, ratio, low, high, _), p in zip(rows, adjusted):
+    adjusted = holm([r[9] for r in rows])
+    for (servers, algorithm, n, m0, m1, ratio, low, high, effect, _), p in zip(rows, adjusted):
         if n == 0:
             result = "no data"
         elif algorithm == "paxos":
@@ -55,7 +58,8 @@ def h2a(frame) -> None:
         else:
             result = "equivalent (supported)" if equivalent(low, high) else "not equivalent"
         print(f"  {servers} servers, {algorithm:5}: n={n}, median {m0:.0f} -> {m1:.0f} bytes, "
-              f"ratio {ratio:.3f} [{low:.3f}, {high:.3f}], p (Holm) {p:.3g}: {result}")
+              f"ratio {ratio:.3f} [{low:.3f}, {high:.3f}], paired difference {effect[0]:.0f} bytes "
+              f"{interval(effect[1], effect[2])}, p (Holm) {p:.3g}: {result}")
 
 
 def plot(frame, column: str, label: str, name: str, title: str) -> str:
@@ -108,7 +112,7 @@ def main() -> int:
     print(f"\n  real cluster: {len(real)} trials, {int((~real['ready']).sum())} not ready, "
           f"{int(real['censored'].sum())} censored")
     real = real[real["ready"] & ~real["censored"]]
-    real_metrics = METRICS[:5] + METRICS[5:6]
+    real_metrics = METRICS[:6]
     show("Real cluster: Multi-Paxos against Raft (Mann-Whitney)",
          algorithms(real, ["servers", "uncommitted"], real_metrics, False))
     plot_all(real, real_metrics, "E3_real", "real cluster")

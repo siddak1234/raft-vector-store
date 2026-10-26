@@ -7,7 +7,7 @@ Statistics and figures for the experiments (`docs/PLAN.md` §5 and Phase 6).
   regenerated from raw results.
 - Dependencies are pinned in `uv.lock`. Run `uv sync` in this folder to create the
   environment.
-- `cargo xtask figures` runs every script below from the repository root.
+- `cargo xtask figures` runs every script below from `analysis/`.
 - `tests/` checks the statistical procedures and runs every script on the committed results:
   `uv run pytest` in this folder. `cargo xtask ci` and CI run them.
 
@@ -16,8 +16,8 @@ Statistics and figures for the experiments (`docs/PLAN.md` §5 and Phase 6).
 | `validation.py` | `results/validation` | Seeds, simulated hours, faults, violations (M12, M13), for the latest run of each algorithm |
 | `aa.py` | `results/AA`, `results/AA-real` | The A/A comparison and its pass or fail verdict, in the simulator and on the real cluster |
 | `e1.py` | `results/E1` | H1: equivalence of latency and throughput per configuration, the M9 costs, and the descriptive measures of amendment A8, in the simulator and on the real cluster |
-| `e1_load.py` | `results/E1-load` | Exploratory (A8): latency, throughput, late commands, and CPU per commit against offered load, the highest sustained rate, and a figure |
-| `e2.py` | `results/E2`, `results/E2-lan`, `results/E2-real` | Figure 16 summary, criteria R1 and R2, the real-cluster run at 150–300 ms, and figures |
+| `e1_load.py` | `results/E1-load` | Exploratory (A8): latency, throughput, late commands, stalled trials, and CPU per commit against offered load, the highest sustained rate, and a figure |
+| `e2.py` | `results/E2`, `results/E2-lan`, `results/E2-real` | Figure 16 summary, criteria R1 and R2, the sensitivity analysis without censored trials, the real-cluster run at 150–300 ms, and figures |
 | `e3.py` | `results/E3` | H2a (election traffic against `k`), H2b (time without a leader, unavailability), M10, and a distribution figure for each failover metric |
 | `e4.py` | `results/E4`, `results/E3` | H3 (re-sent entries, one-sided, in E4a and E3) and catch-up time (M11) |
 | `e5.py` | `results/E5` | Unavailability (M2) in every partition scenario, unnecessary leader changes (M6), and M15–M17 |
@@ -27,4 +27,6 @@ Statistics and figures for the experiments (`docs/PLAN.md` §5 and Phase 6).
 
 `stats.py` holds the pre-registered statistical procedures (`docs/RESEARCH.md` §8),
 `compare.py` the Multi-Paxos-against-Raft comparisons that several scripts share, and
-`results.py` finds the latest results folder of each experiment.
+`results.py` finds the latest results folder of each experiment. Every tested comparison of
+the two algorithms prints its effect size, Multi-Paxos minus Raft, with a 95% bootstrap
+interval (§8).

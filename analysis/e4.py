@@ -36,14 +36,14 @@ def main() -> int:
     catch = frame[frame["procedure"].isin(["E4b", "E4c"])]
     show("E4b and E4c: M11 catch-up time (ms), two-sided, paired by seed",
          algorithms(catch, ["procedure", "servers", "label"], [("catch_up_ms", "M11 catch-up (ms)")], True))
-    try:
-        e3 = load(__import__("results").latest("E3"), "failover.csv")
-        e3 = e3[e3["ready"] & ~e3["censored"]]
-        table = algorithms(e3, ["servers", "uncommitted"], [("resent_entries", "M10 re-sent entries")], True,
-                           alternative="greater")
-        show("H3 (E3): M10, one-sided, paired by seed", table)
-    except (FileNotFoundError, TypeError):
-        pass
+    e3_folder = latest("E3")
+    if e3_folder is None:
+        return 0
+    e3 = load(e3_folder, "failover.csv")
+    e3 = e3[e3["ready"] & ~e3["censored"]]
+    table = algorithms(e3, ["servers", "uncommitted"], [("resent_entries", "M10 re-sent entries")], True,
+                       alternative="greater")
+    show("H3 (E3): M10, one-sided, paired by seed", table)
     return 0
 
 

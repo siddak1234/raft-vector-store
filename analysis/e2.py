@@ -6,9 +6,10 @@ Pass criteria, fixed before data collection:
 - R2: for 12-24, 25-50, 50-100, 100-200, and 150-300 ms, the median increases with the
   minimum timeout.
 
-Censored trials (no leader within 60 s) count at the cap value. The paper's reported values
-are shown alongside ours; they are not expected to match exactly, because the network and
-implementation differ.
+Censored trials (no leader within 60 s) count at the cap value. The sensitivity analysis of
+§8 repeats the summary and the criteria with the censored trials excluded. The paper's
+reported values are shown alongside ours; they are not expected to match exactly, because
+the network and implementation differ.
 
 If the exploratory E2-lan results exist (docs/RESEARCH.md amendment A2), their medians are
 printed after the pre-registered results, clearly labeled. The real-cluster run at
@@ -93,21 +94,39 @@ def main() -> int:
     print(f"E2 results: {describe(folder)}")
     print(f"  trials not ready: {not_ready}; violations: {violations}\n")
     print(summary.to_string(float_format=lambda v: f"{v:.1f}"))
-
-    medians = summary["median"]
-    r1 = medians["150-150"] >= 10 * medians["150-155"]
-    bottom = [medians[label] for label in BOTTOM]
-    r2 = all(a < b for a, b in zip(bottom, bottom[1:]))
-    print(f"\nR1 (150-150 median >= 10 x 150-155 median): "
-          f"{medians['150-150']:.0f} vs {medians['150-155']:.0f} ms -> {'PASS' if r1 else 'FAIL'}")
-    print("R2 (bottom-range medians increase with the minimum timeout): "
-          + " < ".join(f"{m:.1f}" for m in bottom) + f" -> {'PASS' if r2 else 'FAIL'}")
+    print()
+    criteria(summary["median"])
+    sensitivity(frame)
     figure = plot(frame, "E2_figure16.png",
                   "Time to replace a crashed leader (5 servers, ~15 ms round trip)")
     print(f"\nFigure: {figure}")
     exploratory()
     real(frame)
     return 0
+
+
+def criteria(medians: pd.Series) -> None:
+    """Print R1 and R2 for the median time without a leader of each range. A range without
+    trials has no median, and a criterion that needs it fails."""
+    medians = medians.reindex(list(dict.fromkeys(TOP + BOTTOM)))
+    r1 = bool(medians["150-150"] >= 10 * medians["150-155"])
+    bottom = [medians[label] for label in BOTTOM]
+    r2 = all(a < b for a, b in zip(bottom, bottom[1:]))
+    print(f"R1 (150-150 median >= 10 x 150-155 median): "
+          f"{medians['150-150']:.0f} vs {medians['150-155']:.0f} ms -> {'PASS' if r1 else 'FAIL'}")
+    print("R2 (bottom-range medians increase with the minimum timeout): "
+          + " < ".join(f"{m:.1f}" for m in bottom) + f" -> {'PASS' if r2 else 'FAIL'}")
+
+
+def sensitivity(frame: pd.DataFrame) -> None:
+    """The sensitivity analysis of docs/RESEARCH.md §8: the summary and the criteria with the
+    censored trials excluded instead of counted at the cap."""
+    kept = frame[~frame["censored"]]
+    summary = summarize(kept)
+    print(f"\nSensitivity analysis (§8): {len(frame) - len(kept)} censored trials excluded")
+    print(summary[["trials", "median", "mean", "p99", "max"]].to_string(float_format=lambda v: f"{v:.1f}"))
+    print()
+    criteria(summary["median"])
 
 
 def real(simulated: pd.DataFrame) -> None:

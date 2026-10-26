@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from stats import equivalent, holm, mann_whitney, ratio_of_medians, wilcoxon
+from stats import effect_size, equivalent, holm, mann_whitney, ratio_of_medians, wilcoxon
 
 
 def test_holm_follows_the_step_down_procedure():
@@ -65,6 +65,32 @@ def test_a_ratio_without_data_or_to_a_zero_median_is_undefined():
 def test_paired_samples_must_have_the_same_length():
     with pytest.raises(ValueError):
         ratio_of_medians([1.0, 2.0], [1.0], paired=True)
+
+
+def test_the_paired_effect_is_the_median_of_the_differences():
+    a = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    b = np.array([5.0, 1.0, 9.0, 2.0, 8.0])
+    effect, low, high = effect_size(a, b, paired=True)
+    # The differences are 4, -1, 6, -2, and 3, with median 3; the difference of the
+    # medians would be 5 - 3 = 2.
+    assert effect == 3.0
+    assert low <= effect <= high
+    assert effect_size(a, b, paired=True) == (effect, low, high)
+
+
+def test_the_unpaired_effect_is_the_difference_of_medians():
+    a = np.array([1.0, 2.0, 3.0, 100.0, 200.0])
+    b = np.array([10.0, 11.0, 12.0, 13.0, 14.0])
+    effect, low, high = effect_size(a, b, paired=False)
+    assert effect == pytest.approx(12.0 - 3.0)
+    assert low <= effect <= high
+
+
+def test_an_effect_without_data_is_undefined():
+    for result in (effect_size([], [1.0], paired=False), effect_size([1.0], [], paired=True)):
+        assert all(math.isnan(value) for value in result)
+    with pytest.raises(ValueError):
+        effect_size([1.0, 2.0], [1.0], paired=True)
 
 
 def test_equivalence_needs_the_whole_interval_within_five_percent():

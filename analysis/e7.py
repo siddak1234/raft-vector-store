@@ -47,7 +47,7 @@ def bugs() -> pd.DataFrame:
 def main() -> int:
     folder = latest("E7")
     if folder is None:
-        print("E7: no results yet (run `cargo xtask experiment E7`)")
+        print("E7: no results yet (run `cargo xtask complexity`)")
         return 0
     print(f"E7 results: {describe(folder)}")
     protocol = json.loads((folder / "protocol.json").read_text())

@@ -592,11 +592,87 @@ every trial with such a refusal needed more than one round.
 
 Catch-up time (M11) is unchanged from Phase 5.
 
+### Analyses added after Phase 6
+
+Two analyses that `docs/RESEARCH.md` §8 specifies, effect sizes and the E2 sensitivity
+analysis, were missing from the analysis code, and three results it computed were not
+reported above. All five come from the committed results; no run was repeated. No
+decision rule of H1–H6 uses an effect size, so no verdict above changes.
+
+**Effect sizes (§8).** Every tested comparison now has an effect size, Multi-Paxos minus
+Raft, with a 95% bootstrap interval: the median of paired differences in the simulator and
+the difference of medians on the real cluster. `cargo xtask figures` prints all of them;
+the comparisons behind the verdicts:
+
+| Comparison | Multi-Paxos minus Raft (95% CI) |
+|---|---|
+| E1, 16 clients, simulator: median latency | −0.16 and −0.21 ms (LAN-like, 3 and 5 servers); −2.35 and −3.06 ms (paper-like); every interval within 0.02 ms of its estimate |
+| E1, 16 clients, simulator: throughput | +647 and +775 per s (LAN-like); +42.7 and +51.1 per s (paper-like) |
+| E1, 16 clients, real cluster: median latency | 3 servers: −0.17 ms [−0.24, −0.10] (LAN-like), −1.84 ms [−3.67, −0.85] (paper-like); 5 servers: +0.04 ms [−0.07, 0.10], −4.12 ms [−4.38, −2.37] |
+| E3, simulator: time without a leader (M1) | −8.8 to −23.3 ms on 3 servers, −5.1 to −14.9 ms on 5; every interval below 0 |
+| E3, simulator: unavailability (M2) | −1.7 to −2.3 ms on 3 servers, −0.8 to −1.3 ms on 5 |
+| E3, real cluster, k = 100: M1 | −20.2 ms [−41.6, −3.4] (3 servers), −14.8 ms [−26.3, −1.8] (5 servers) |
+| E3, H2a: election bytes (M4), k = 1000 minus k = 0 | Multi-Paxos +159,837 bytes [26,360, 159,800] (3 servers), +319,674 [186,700, 320,200] (5); Raft +8,000 [8,000, 8,000] (3), +16,000 [15,970, 16,000] (5) |
+| E4a: re-sent entries (M10) | 3 servers: +92 [91, 214] (k = 10), +311.5 [301, 320.5] (k = 100); 5 servers: +116 [116, 120], +503 [500, 560] |
+| E4b and E4c: catch-up time (M11) | n = 1,000: +170 to +187 ms; n = 100: −4.9 to −7.5 ms |
+| E5, simulator: M2 | −0.04 to −2.11 ms in every scenario |
+| E5, P5: leader changes (M6) | +13 [13, 13] on both sizes |
+| E8, S1: shard recovery (M21) | +22.9 ms [−231.1, 478.1] (3 servers), +476.6 ms [−34.6, 505.6] (5) |
+| E8, S2: M21 | −11.9 ms [−50.0, 10.3] (3 servers), −7.1 ms [−35.4, 10.2] (5) |
+
+**E2 sensitivity analysis (§8).** Without the 586 censored trials (550 at 150–150 ms and 36
+at 150–151 ms), the 150–150 ms median is 325.6 ms, from the 448 trials that elected a
+leader, against 632.0 ms at 150–155 ms, so **R1 fails**. No trial in the five bottom ranges
+was censored, so their medians and R2's failure are unchanged. R1 passes only because the
+55% of 150–150 ms trials that elected no leader within 60 s count at the cap.
+
+**Network bytes per commit (M9, E1).** Pre-registered for E1, but only the A/A tests
+reported it. Ratio of medians, Multi-Paxos over Raft, in the simulator, with the real
+cluster in parentheses where it ran:
+
+| Clients | 3 servers, LAN-like | 3 servers, paper-like | 5 servers, LAN-like | 5 servers, paper-like |
+|---|---|---|---|---|
+| 1 | 1.019 (1.021) | 1.176 (1.199) | 1.018 (1.022) | 1.172 (1.206) |
+| 4 | 0.726 | 0.801 | 0.741 | 0.819 |
+| 16 | 0.323 (0.330) | 0.356 (0.371) | 0.327 (0.332) | 0.359 (0.376) |
+| 64 | 0.178 | 0.203 | 0.192 | 0.219 |
+
+With one client Multi-Paxos sends 2–21% more bytes per commit. With more commands in flight
+Raft sends more: at 16 clients 2.8–3.1 times Multi-Paxos's bytes in the simulator and
+2.7–3.0 times on the real cluster, and at 64 clients 4.6–5.6 times. In messages per commit
+the ratio is 0.89–0.95 at 4 and 16 clients (0.94–0.96 on the real cluster at 16) and
+1.10–1.12 at 64, so Raft sends more messages at moderate load and fewer at high load. Which messages carry Raft's extra bytes was not
+measured.
+
+**The single-server reference (E1).** In all eight single-server configurations the two
+algorithms behaved identically: every paired difference in median and p99 latency and in
+throughput is 0. The median latency is 1.0 ms on the LAN-like network and 15.0 ms on the
+paper-like one, one client round trip, and the server sends no messages.
+
+**Stalled trials under load (E1-load).** A trial stalled when no command committed in its
+10 s measurement window. Rows with any stalled trial or late command, out of 30 trials each:
+
+| Servers | Offered per s | Raft: stalled, with a late command | Multi-Paxos: stalled, with a late command |
+|---|---|---|---|
+| 3 | 2,000 | 0, 0 | 0, 1 |
+| 3 | 4,000 | 0, 0 | 0, 1 |
+| 3 | 8,000 | 1, 3 | 0, 0 |
+| 3 | 10,000 | 7, 17 | 0, 4 |
+| 5 | 1,000 | 1, 1 | 0, 0 |
+| 5 | 6,000 | 0, 3 | 0, 2 |
+| 5 | 8,000 | 7, 29 | 1, 4 |
+| 5 | 10,000 | 28, 30 | 3, 11 |
+
+Over all 360 trials of each algorithm, Raft stalled in 44 and Multi-Paxos in 4. Two Raft
+stalls came at rates both algorithms sustained: 3 servers at 8,000 per s, and 5 servers at
+1,000 per s (seed 13), the lowest rate tested. Neither cause is known; the second was rerun
+(below).
+
 ### Exploratory analyses
 
-These were decided after seeing the data and decide no hypothesis. Each ran on a scratch
-copy of the code with added counters; the copy reproduced every official value for the
-trials it reran, so the counters describe the official trials.
+These were decided after seeing the data and decide no hypothesis. Except the last, each ran
+on a scratch copy of the code with added counters; the copy reproduced every official value
+for the trials it reran, so the counters describe the official trials.
 
 **What grows in Raft's election traffic (E3, H2a).** Messages between the crash and the
 election, by type, median over seeds 1–200, 3 servers, k = 0 against k = 1000:
@@ -651,3 +727,10 @@ reaching a candidate, and 3 a stale leader's reaching the new leader.
 A follower rejects an `AppendEntries` that arrives before the one it follows. Rejections
 are frequent from 4 clients on, and the number of entries each message carries grows with
 the commands in flight.
+
+**Rerun of the trial that stalled at 1,000 per s (E1-load).** A scratch rerun, not
+committed, of Raft on 5 servers at 1,000 per s with seed 13, the same code path as at
+`data-v4` (since that tag only the failover and recovery procedures, the client tests, and
+the tests' one dependency have changed). It received 10,002 replies in its window, with no late command and a median
+latency of 52.1 ms, so the stall did not repeat. The real cluster is not deterministic, and
+one rerun does not show what caused the stall.

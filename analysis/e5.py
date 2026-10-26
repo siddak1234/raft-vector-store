@@ -1,8 +1,9 @@
 """E5: partitions (docs/RESEARCH.md §6, H2b; details in amendment A5).
 
-M2 (unavailability) is compared two-sided in every scenario; M6 (unnecessary leader
-changes) in P3 and P5, where the leader keeps a majority; M15-M17 are reported. Tests are
-Holm-corrected across the configurations of the experiment.
+In the simulator, M2 (unavailability), M6 (unnecessary leader changes), and M15-M17 are
+compared two-sided in every scenario and cluster size, in one Holm family. The mean of M6
+is also printed for P3 and P5, where the leader keeps a majority. On the real cluster, M2
+and M6 are compared in a Holm family of their own.
 """
 
 import sys

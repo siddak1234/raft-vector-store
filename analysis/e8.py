@@ -3,7 +3,9 @@
 H6: shard recovery time (M21) is equivalent between the algorithms when only a data node
 fails (S1: the ratio of medians, Multi-Paxos over Raft, has a 90% bootstrap interval within
 [0.95, 1.05]), and differs when the control-plane leader fails at the same time (S2:
-two-sided Mann-Whitney U). Every trial also checks C1 and C2.
+two-sided Mann-Whitney U). The Mann-Whitney tests of all four configurations, S1 and S2 on
+3 and 5 servers, form one Holm family, which S2's verdict uses. Every trial also checks C1
+and C2.
 """
 
 import math

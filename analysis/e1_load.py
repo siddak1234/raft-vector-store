@@ -3,10 +3,11 @@ amendment A8). Exploratory: it decides no hypothesis and has no tests.
 
 For each cluster size, algorithm, and offered rate, the medians across trials of the
 achieved throughput, the median and p99 latency, the fraction of commands that were late
-(no reply within 2 s of when they were due), and the CPU time per commit. A rate is
-sustained when the median throughput is at least 95% of the offered rate and the median
-trial has no late command. A trial's latency percentile is empty when it falls among its
-late commands; such a trial counts as slower than every other here, so a median across
+(no reply within 2 s of when they were due), and the CPU time per commit, with the number
+of trials that stalled (no commit in the measurement window) and that had a late command.
+A rate is sustained when the median throughput is at least 95% of the offered rate and the
+median trial has no late command. A trial's latency percentile is empty when it falls among
+its late commands; such a trial counts as slower than every other here, so a median across
 trials can be infinite, and the figure leaves those points out. The figure plots latency
 against achieved throughput, one line per algorithm.
 """
@@ -42,6 +43,8 @@ def summary(frame: pd.DataFrame) -> pd.DataFrame:
     grouped = frame.groupby(["servers", "algorithm", "offered_per_s"])
     table = grouped[list(columns)].median().rename(columns=columns)
     table.insert(0, "trials", grouped.size())
+    table.insert(1, "stalled", grouped["commits"].apply(lambda commits: int((commits == 0).sum())))
+    table.insert(2, "with late", grouped["late"].apply(lambda late: int((late > 0).sum())))
     table["sustained"] = (table["throughput"] >= SUSTAINED * table.index.get_level_values("offered_per_s")) & (
         table["late"] == 0
     )

@@ -5,9 +5,11 @@ H1: with a stable leader, Multi-Paxos's median commit latency and throughput are
 servers. For each configuration and metric, the ratio of medians (Multi-Paxos over Raft) is
 bootstrapped; simulator trials are paired by seed, real-cluster trials are not. The
 two-sided tests (Wilcoxon signed-rank for paired, Mann-Whitney U for unpaired) are
-Holm-corrected across the configurations of the experiment.
+Holm-corrected across the configurations and metrics of each environment. Each comparison
+also has its effect size, Multi-Paxos minus Raft, with a 95% bootstrap interval.
 
-Single-server configurations are the reference and are reported but not tested.
+Single-server configurations are the reference. They are compared like the others and are
+part of the simulator's Holm family, but H1's decision uses only 3 and 5 servers.
 
 Amendment A8 adds descriptive measures: p99.9 and maximum latency, storage syncs and bytes
 synced per commit, and, on the real cluster, CPU time per commit and peak memory. They are
@@ -25,7 +27,8 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from results import describe, figure_path, latest, load  # noqa: E402
-from stats import equivalent, holm, mann_whitney, ratio_of_medians, wilcoxon  # noqa: E402
+from compare import interval  # noqa: E402
+from stats import effect_size, equivalent, holm, mann_whitney, ratio_of_medians, wilcoxon  # noqa: E402
 
 DECISION = [
     ("median_latency_ms", "M7 median latency"),
@@ -47,7 +50,8 @@ DESCRIPTIVE = [
 
 
 def compare(frame: pd.DataFrame, paired: bool) -> pd.DataFrame:
-    """One row per configuration and metric: medians, ratio, interval, and p-value."""
+    """One row per configuration and metric: medians, ratio and its interval, effect size
+    (Multi-Paxos minus Raft) and its interval, and p-value."""
     rows = []
     keys = ["servers", "network", "clients"]
     for config, group in frame.groupby(keys):
@@ -64,6 +68,7 @@ def compare(frame: pd.DataFrame, paired: bool) -> pd.DataFrame:
                 b = paxos[column].dropna().to_numpy()
                 p = mann_whitney(a, b)
             ratio, low, high = ratio_of_medians(a, b, paired=paired)
+            effect, effect_low, effect_high = effect_size(a, b, paired=paired)
             rows.append({
                 "servers": config[0],
                 "network": config[1],
@@ -77,6 +82,8 @@ def compare(frame: pd.DataFrame, paired: bool) -> pd.DataFrame:
                 "low": low,
                 "high": high,
                 "equivalent": equivalent(low, high),
+                "paxos-raft": effect,
+                "95% CI": interval(effect_low, effect_high),
                 "p": p,
             })
     table = pd.DataFrame(rows)
@@ -162,7 +169,8 @@ def plot(table: pd.DataFrame, name: str, title: str) -> str:
 
 def show(table: pd.DataFrame) -> None:
     printable = table.drop(columns=["decision", "p"]).copy()
-    printable["90% CI"] = [f"[{lo:.3f}, {hi:.3f}]" for lo, hi in zip(table["low"], table["high"])]
+    printable.insert(printable.columns.get_loc("ratio") + 1, "90% CI",
+                     [f"[{lo:.3f}, {hi:.3f}]" for lo, hi in zip(table["low"], table["high"])])
     printable = printable.drop(columns=["low", "high"])
     print(printable.to_string(index=False, float_format=lambda v: f"{v:.4g}"))
 
