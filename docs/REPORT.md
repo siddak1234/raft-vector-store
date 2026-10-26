@@ -149,7 +149,7 @@ node serves a shard as primary at any moment (C1), and no acknowledged write is 
 
 The research protocol (`docs/RESEARCH.md`) fixed the hypotheses, metrics, procedures,
 sample sizes, and tests before any data existed. It was tagged `protocol-v1`; later changes
-are dated amendments (§3.5). The comparison rules (`docs/PLAN.md` §5):
+are dated amendments (§3.6). The comparison rules (`docs/PLAN.md` §5):
 
 - **One variable.** One binary with `--consensus raft|paxos`; only the algorithm crates
   differ; both use the same `Config` and the same random-number generator.
@@ -213,7 +213,7 @@ are dated amendments (§3.5). The comparison rules (`docs/PLAN.md` §5):
 | E3 | RQ2, RQ3 | 4 clients; a client proposes `k` commands that reach a random subset of followers, then the leader crashes | Servers {3, 5} × k {0, 10, 100, 1000} | 1,000 sim; 100 real for k {0, 100} | Time without a leader, unavailability, election rounds and traffic, re-sent entries, log gaps, entries toward a leader, discarded entries |
 | E4 | RQ3 | E4a: two consecutive crashes with `k` uncommitted entries each. E4b: a follower restarts after `n` commits. E4c: a partitioned follower reconnects after `n` commits | E4a: k {10, 100}; E4b and E4c: n {100, 1000}; servers {3, 5} | 1,000 sim | Re-sent entries by the third leader (E4a), catch-up time (E4b, E4c) |
 | E5 | RQ2 | 4 clients; a 2 s fault, then heal | P1 leader alone, P2 leader with one follower, P3 one follower isolated, P4 leader's outgoing links dropped, P5 one link flapping for 10 s; servers 3 and 5 (P2: 5) | 1,000 sim; 100 real for P1 and P3 with 5 servers | Unavailability, unnecessary leader changes (P3, P5), log gaps, entries toward a leader, discarded entries |
-| E6 | RQ4 | Stateright depth-first search over every reachable state | A ladder of 8 bounds (§3.5) | One search per rung and algorithm | Reachable states |
+| E6 | RQ4 | Stateright depth-first search over every reachable state | A ladder of 8 bounds (§3.6) | One search per rung and algorithm | Reachable states |
 | E7 | RQ5 | `rust-code-analysis-cli` on both algorithm crates at the data-collection tag | Per module: election, replication, commit, shared state | — | Message types, persistent fields, SLOC, LLOC, cyclomatic and cognitive complexity, bugs logged |
 | E8 | RQ6 | 4 data nodes, one collection of 4 shards × 3 replicas loaded with 100,000 GloVe-25 vectors, 4 writing clients. S1: kill the primary of shard 0. S2: kill it and the control-plane leader at once | 3 and 5 control-plane servers × S1, S2 | 100 real | Shard recovery time, with checks C1 and C2 on every trial |
 
@@ -225,7 +225,21 @@ entries in E4. H4 compares reachable states directly; log gaps and entries sent 
 leader must be zero for Raft and above zero for Multi-Paxos, and discarded entries are
 tested two-sided. H5 is descriptive. H6 is equivalence for S1 and a two-sided test for S2.
 
-### 3.5 Changes after the protocol was frozen
+### 3.5 Datasets
+
+Both datasets come from ANN-Benchmarks (Aumüller et al., 2020). `cargo xtask dataset`
+downloads them from `ann-benchmarks.com` into a folder outside the repository and checks
+the SHA-256 of each file against the value recorded on 2026-10-24.
+
+| Dataset | Vectors | Distance | Used in | License |
+|---|---|---|---|---|
+| `glove-25-angular.hdf5` (GloVe, Pennington et al., 2014) | 1,183,514 training, 10,000 test, 25 dimensions | angular | E8, the Phase 4 checks, the demo | Public Domain Dedication and License 1.0 |
+| `sift-128-euclidean.hdf5` (SIFT1M, Jégou et al., 2011) | 1,000,000 training, 10,000 test, 128 dimensions | Euclidean | the Phase 4 checks only | none stated by the source that we could find |
+
+SHA-256: GloVe `51004cb0ae962159f0db507a51fec2b395de14b166f55976c89f16bd2f8b6391`,
+SIFT `dd6f0a6ed6b7ebb8934680f861a33ed01ff33991eaee4fd60914d854a0ca5984`.
+
+### 3.6 Changes after the protocol was frozen
 
 Every change is a dated amendment in `docs/RESEARCH.md` or `docs/PAXOS_SPEC.md`, made
 before the data it affects unless it records an outcome:
@@ -262,6 +276,10 @@ before the data it affects unless it records an outcome:
 - **A9**, made before any run at `data-v3`, fixes an analysis bug: a comparison without data
   would have read as significant or as no difference. The code that runs the experiments is
   unchanged, and every run is made at `data-v4`.
+- **A10**, made in the analysis, fixes a measurement bug: re-sent entries (M10) left out the
+  messages a new leader sends in the input that elects it. The runs that measure M10, the
+  simulator A/A test, E3, and E4, are rerun at `data-v5`; every other run stays at
+  `data-v4`, after checks showed the fix cannot change it.
 
 `docs/BUGLOG.md` records every bug found in either algorithm or in shared code, with the
 checker that found it; it is the data for metric M20.
@@ -319,6 +337,23 @@ checker that found it; it is the data for metric M20.
 - E1's clients are closed-loop: each waits for its reply before sending again, which can
   hide tail latency, because a slow cluster also slows the load. E1-load sends at fixed
   rates instead, but it is exploratory, with 30 trials per point.
+- Three metrics measure less, or more, than their names suggest; each was checked in the
+  analysis (section 4):
+  - **Election traffic (M4)** counts every message sent between the crash and the
+    election, including the followers' replies to the crashed leader's last messages. Those
+    replies, not election messages, are why Raft's M4 grows with `k`.
+  - **Entries toward a leader (M16)** counts by the receiver's role when a message arrives.
+    For Raft these are almost all a new leader's `AppendEntries` reaching a candidate of
+    the same term, not entries flowing toward a leader.
+  - **Unavailability (M2)** times only the first command after the fault. In P3 and P5 that
+    command commits before P5's link first changes, so M2 cannot tell them apart, and the
+    flapping shows only in leader changes (M6).
+- Every message in both environments gets its own random delay (§3.2), so messages arrive
+  out of order. Raft's followers reject an `AppendEntries` whose predecessor has not
+  arrived, about once per commit at 16 clients and more, while Multi-Paxos accepts each
+  index on its own. A Raft implementation that delivers each follower's messages in order,
+  over one connection, would see fewer rejections; our steady-state comparison reflects
+  this network model.
 - Catch-up time (E4b, E4c) includes the wait for the leader's next heartbeat after the
   follower returns. Because each trial starts right after a leader is ready, that wait
   depends on how long the trial's commands took to commit. This applies to both algorithms,
@@ -349,9 +384,16 @@ checker that found it; it is the data for metric M20.
   takes are missing from the servers, so the saturation points of E1-load belong to this
   harness as much as to the algorithms. Storage calls `fsync(2)` (amendment A6), which
   survives process crashes, the only faults injected, but not necessarily power loss.
-- The data plane uses brute-force search, keeps data in memory, and holds 100,000 GloVe-25
-  vectors. Only its recovery time is compared, and that depends on lease timing more than
-  on search.
+- E8's vector store differs from production use. It holds 100,000 GloVe vectors of 25
+  dimensions, where current embeddings have 768–3,072 (VectorDBBench). Clients write one
+  vector per request and wait for it, where vector databases recommend batches: 64–256
+  points per request for Qdrant, and up to 1,000 records or 2 MB for Pinecone. No searches
+  run during the trials, and search is brute force rather than an approximate index such as
+  HNSW. E8 compares recovery time, which lease timing dominates (section 4.7), so these
+  differences limit how far E8 generalizes more than they change its comparison.
+- Outside the comparison: reads (both algorithms confirm leadership the same way),
+  snapshots and log compaction, membership changes, wide-area networks, clusters of more
+  than five servers, and durability against power loss.
 
 **Statistical.**
 
@@ -385,3 +427,9 @@ checker that found it; it is the data for metric M20.
    Approximate Nearest Neighbor Algorithms*. Information Systems 87, 2020.
 9. J. Pennington, R. Socher, and C. Manning. *GloVe: Global Vectors for Word
    Representation*. EMNLP 2014.
+10. H. Jégou, M. Douze, and C. Schmid. *Product Quantization for Nearest Neighbor Search*.
+    IEEE Transactions on Pattern Analysis and Machine Intelligence 33(1), 2011.
+11. Zilliz. *Announcing VDBBench 1.0*.
+    https://zilliz.com/blog/vdbbench-1-0-benchmarking-with-your-real-world-production-workloads
+12. Qdrant. *Bulk upload vectors*. https://qdrant.tech/documentation/manage-data/bulk-upload/
+13. Pinecone. *Upsert data*. https://docs.pinecone.io/guides/data/upsert-data
