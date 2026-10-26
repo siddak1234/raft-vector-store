@@ -1,0 +1,95 @@
+# E8: vector store recovery (docs/RESEARCH.md §6, H6; details in amendments A3.3 and A5),
+# real cluster only. 3 or 5 control-plane servers, 4 data nodes, one collection of 4 shards
+# with 3 replicas and 100,000 GloVe-25 vectors, 4 clients upserting. S1 kills the primary of
+# shard 0; S2 also kills the control-plane leader in the same instant. 100 seeds each.
+
+id = "E8"
+description = "Shard recovery after a data-node primary crash"
+
+[[run]]
+scenario = "vectors"
+environment = "real"
+label = "S1-3s"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+crash_leader = false
+seeds = [1, 100]
+
+[[run]]
+scenario = "vectors"
+environment = "real"
+label = "S1-3s"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+crash_leader = false
+seeds = [1, 100]
+
+[[run]]
+scenario = "vectors"
+environment = "real"
+label = "S2-3s"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+crash_leader = true
+seeds = [1, 100]
+
+[[run]]
+scenario = "vectors"
+environment = "real"
+label = "S2-3s"
+algorithm = "paxos"
+servers = 3
+network = "paper"
+clients = 4
+crash_leader = true
+seeds = [1, 100]
+
+[[run]]
+scenario = "vectors"
+environment = "real"
+label = "S1-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+crash_leader = false
+seeds = [1, 100]
+
+[[run]]
+scenario = "vectors"
+environment = "real"
+label = "S1-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+crash_leader = false
+seeds = [1, 100]
+
+[[run]]
+scenario = "vectors"
+environment = "real"
+label = "S2-5s"
+algorithm = "raft"
+servers = 5
+network = "paper"
+clients = 4
+crash_leader = true
+seeds = [1, 100]
+
+[[run]]
+scenario = "vectors"
+environment = "real"
+label = "S2-5s"
+algorithm = "paxos"
+servers = 5
+network = "paper"
+clients = 4
+crash_leader = true
+seeds = [1, 100]
