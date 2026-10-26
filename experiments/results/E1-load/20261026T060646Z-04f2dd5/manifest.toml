@@ -1,0 +1,14 @@
+experiment = "E1-load"
+config = "experiments/configs/E1-load.toml"
+commit = "04f2dd58b4f7780f05e7ae16d93f8cfe55ecdf30"
+started = "2026-10-26T06:06:46Z"
+finished = "2026-10-26T09:11:29Z"
+trials = 720
+official = true
+
+[machine]
+os = "macos"
+arch = "aarch64"
+cpu = "Apple M1 Pro"
+logical_cpus = 8
+rustc = "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
