@@ -417,9 +417,9 @@ trials at each rate:
 
 Raft had the lower CPU time per commit at every rate it sustained, and the lower median
 latency from 2,000 per s up to its limit, by 1.1–4.8 ms; at 1,000 per s Multi-Paxos's was
-lower by 0.2 ms on 3 servers and 1.0 ms on 5. Multi-Paxos kept up at every tested rate, with its median latency rising to
-227–231 ms on 5 servers at 8,000–10,000 per s. Past its limit, Raft's throughput fell far
-below the offered rate instead of leveling off.
+lower by 0.2 ms on 3 servers and 1.0 ms on 5. Multi-Paxos kept up at every tested rate,
+with its median latency rising to 227–231 ms on 5 servers at 8,000–10,000 per s. Past its
+limit, Raft's throughput fell far below the offered rate instead of leveling off.
 
 ### E3: Failover (H2a, H2b)
 
@@ -665,8 +665,8 @@ Raft sends more: at 16 clients 2.8–3.1 times Multi-Paxos's bytes in the simula
 2.7–3.0 times on the real cluster, and at 64 clients 4.6–5.6 times. In messages per commit
 the ratio is 0.89–0.95 at 4 and 16 clients (0.94–0.96 on the real cluster at 16) and
 1.10–1.12 at 64, so Raft sends more messages at moderate load and fewer at high load: with
-64 clients on 3 servers and the paper-like network, 3.61 messages per commit against 4.03. Which messages carry Raft's extra bytes was not
-measured.
+64 clients on 3 servers and the paper-like network, 3.61 messages per commit against 4.03.
+Which messages carry Raft's extra bytes was not measured.
 
 **The single-server reference (E1).** In all eight single-server configurations the two
 algorithms behaved identically: every paired difference in median and p99 latency and in
@@ -755,14 +755,14 @@ are frequent from 4 clients on, and the number of entries each message carries g
 the commands in flight.
 
 **Above the tested range (E1-load).** A scratch diagnostic, not committed, ran one trial of
-each algorithm at 12,000 per s on 3 servers, from a copy of the code with debug counters. Neither committed a command
-in its window. Over the trial's 144,000 offered commands (2 s of warm-up and the 10 s
-window), the Raft leader synced its storage 540,927 times and the Multi-Paxos leader 544,449
-times, while each follower synced fewer than 4,000 times.
+each algorithm at 12,000 per s on 3 servers, from a copy of the code with debug counters.
+Neither committed a command in its window. Over the trial's 144,000 offered commands (2 s
+of warm-up and the 10 s window), the Raft leader synced its storage 540,927 times and the
+Multi-Paxos leader 544,449 times, while each follower synced fewer than 4,000 times.
 
 **Rerun of the trial that stalled at 1,000 per s (E1-load).** A scratch rerun, not
 committed, of Raft on 5 servers at 1,000 per s with seed 13, the same code path as at
 `data-v4` (since that tag only the failover and recovery procedures, the client tests, and
-the tests' one dependency have changed). It received 10,002 replies in its window, with no late command and a median
-latency of 52.1 ms, so the stall did not repeat. The real cluster is not deterministic, and
-one rerun does not show what caused the stall.
+the tests' one dependency have changed). It received 10,002 replies in its window, with no
+late command and a median latency of 52.1 ms, so the stall did not repeat. The real
+cluster is not deterministic, and one rerun does not show what caused the stall.
