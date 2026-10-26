@@ -25,9 +25,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+from matplotlib.ticker import NullLocator  # noqa: E402
 
+from compare import ALGORITHMS, COLORS, NAMES, interval  # noqa: E402
 from results import describe, figure_path, latest, load  # noqa: E402
-from compare import interval  # noqa: E402
 from stats import effect_size, equivalent, holm, mann_whitney, ratio_of_medians, wilcoxon  # noqa: E402
 
 DECISION = [
@@ -167,6 +168,73 @@ def plot(table: pd.DataFrame, name: str, title: str) -> str:
     return str(path)
 
 
+PANELS = [
+    (3, "lan", "3 servers, LAN-like"),
+    (3, "paper", "3 servers, paper-like"),
+    (5, "lan", "5 servers, LAN-like"),
+    (5, "paper", "5 servers, paper-like"),
+]
+SIMULATOR = {"marker": "o", "linestyle": "-"}
+# The real cluster ran 1 and 16 clients only, so its points are not joined by lines.
+REAL = {"marker": "s", "linestyle": "none", "markerfacecolor": "none", "markersize": 7}
+SPEED = [
+    ("median_latency_ms", "median latency (ms)", False),
+    ("p99_latency_ms", "p99 latency (ms)", False),
+    ("throughput_per_s", "throughput (commits/s)", True),
+]
+COST = [
+    ("messages_per_commit", "messages per commit", False),
+    ("bytes_per_commit", "bytes per commit", False),
+    ("fsyncs_per_commit", "fsyncs per commit", False),
+]
+RESOURCES = [
+    ("cpu_ms_per_commit", "CPU time per commit (ms)", False),
+    ("max_rss_mb", "peak memory per server (MB)", False),
+]
+
+
+def against_clients(environments: list, metrics: list, name: str, title: str) -> str:
+    """The median across trials of each metric against the number of clients: one row per
+    metric, one column per cluster size and network, one line per algorithm and
+    environment. `environments` lists (trials, name, line style)."""
+    figure, axes = plt.subplots(len(metrics), len(PANELS), figsize=(3.3 * len(PANELS), 2.5 * len(metrics)),
+                                squeeze=False)
+    clients = sorted(set().union(*(frame["clients"].unique() for frame, _, _ in environments)))
+    for row, (column, label, log) in enumerate(metrics):
+        for col, (servers, network, heading) in enumerate(PANELS):
+            axis = axes[row][col]
+            for frame, environment, style in environments:
+                group = frame[(frame["servers"] == servers) & (frame["network"] == network)]
+                for algorithm in ALGORITHMS:
+                    medians = group[group["algorithm"] == algorithm].groupby("clients")[column].median().dropna()
+                    if len(medians):
+                        axis.plot(medians.index, medians.to_numpy(), color=COLORS[algorithm],
+                                  label=f"{NAMES[algorithm]}, {environment}", **style)
+            axis.set_xscale("log", base=2)
+            axis.xaxis.set_minor_locator(NullLocator())
+            axis.set_xticks(clients, [str(c) for c in clients])
+            if log:
+                axis.set_yscale("log")
+            axis.tick_params(labelsize=7)
+            if row == 0:
+                axis.set_title(heading, fontsize=9)
+            if row == len(metrics) - 1:
+                axis.set_xlabel("clients", fontsize=8)
+            if col == 0:
+                axis.set_ylabel(label, fontsize=8)
+    entries = {}
+    for axis in axes.flat:
+        for handle, label in zip(*axis.get_legend_handles_labels()):
+            entries.setdefault(label, handle)
+    figure.legend(entries.values(), entries.keys(), loc="lower center", ncol=len(entries), fontsize=8)
+    figure.suptitle(title)
+    figure.tight_layout(rect=(0, 0.06, 1, 1))
+    path = figure_path(name, report=True)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    return str(path)
+
+
 def show(table: pd.DataFrame) -> None:
     printable = table.drop(columns=["decision", "p"]).copy()
     printable.insert(printable.columns.get_loc("ratio") + 1, "90% CI",
@@ -190,17 +258,28 @@ def main() -> int:
     verdict(table, "simulator")
     show_descriptive(descriptive(sim, paired=True), "simulator")
     print(f"Figure: {plot(table, 'E1_ratios.png', 'E1 simulator: Multi-Paxos / Raft')}")
+    environments = [(sim, "simulator", SIMULATOR)]
     try:
         real = load(folder, "real-steady.csv")
     except FileNotFoundError:
-        return 0
-    print(f"\n  real cluster: {len(real)} trials, {int((~real['ready']).sum())} not ready")
-    real = real[real["ready"]]
-    table = compare(real, paired=False)
-    show(table)
-    verdict(table, "real cluster")
-    show_descriptive(descriptive(real, paired=False), "real cluster")
-    print(f"Figure: {plot(table, 'E1_real_ratios.png', 'E1 real cluster: Multi-Paxos / Raft')}")
+        real = None
+    if real is not None:
+        print(f"\n  real cluster: {len(real)} trials, {int((~real['ready']).sum())} not ready")
+        real = real[real["ready"]]
+        table = compare(real, paired=False)
+        show(table)
+        verdict(table, "real cluster")
+        show_descriptive(descriptive(real, paired=False), "real cluster")
+        print(f"Figure: {plot(table, 'E1_real_ratios.png', 'E1 real cluster: Multi-Paxos / Raft')}")
+        environments.append((real, "real cluster", REAL))
+    figures = [
+        (environments, SPEED, "E1_speed.png", "E1: latency and throughput"),
+        (environments, COST, "E1_cost.png", "E1: messages, bytes, and fsyncs per commit"),
+    ]
+    if real is not None:
+        figures.append((environments[1:], RESOURCES, "E1_resources.png", "E1 real cluster: CPU time and memory"))
+    for arguments in figures:
+        print(f"Figure: {against_clients(*arguments)}")
     return 0
 
 

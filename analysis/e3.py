@@ -18,7 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from compare import algorithms, cdf, interval, paired, show  # noqa: E402
+from compare import ALGORITHMS, COLORS, NAMES, algorithms, cdf, interval, paired, show  # noqa: E402
 from results import describe, figure_path, latest, load  # noqa: E402
 from stats import ALPHA, effect_size, equivalent, holm, ratio_of_medians, wilcoxon  # noqa: E402
 
@@ -33,6 +33,11 @@ METRICS = [
     ("entries_to_leaders", "M16 entries toward leaders"),
     ("discarded_entries", "M17 discarded entries"),
 ]
+# The figures docs/REPORT.md shows; the others stay in analysis/figures/.
+REPORT = {"E3_time_without_leader_ms.png", "E3_election_bytes.png", "E3_resent_entries.png"}
+# Metrics whose values span orders of magnitude between the algorithms, drawn on a
+# logarithmic axis that is linear around 0, since a count can be 0.
+WIDE = {"election_messages", "election_bytes", "resent_entries", "entries_to_leaders", "max_log_gaps"}
 
 
 def h2a(frame) -> None:
@@ -68,18 +73,21 @@ def plot(frame, column: str, label: str, name: str, title: str) -> str:
     ks = sorted(frame["uncommitted"].unique())
     figure, axes = plt.subplots(1, len(ks), figsize=(3.2 * len(ks), 3), squeeze=False)
     for axis, k in zip(axes[0], ks):
-        for servers in sorted(frame["servers"].unique()):
-            for algorithm in ["raft", "paxos"]:
+        for servers, linestyle in zip(sorted(frame["servers"].unique()), ["-", "--"]):
+            for algorithm in ALGORITHMS:
                 group = frame[(frame["uncommitted"] == k) & (frame["servers"] == servers)
                               & (frame["algorithm"] == algorithm)]
-                cdf(axis, group[column], f"{algorithm} {servers}s")
+                cdf(axis, group[column], f"{NAMES[algorithm]}, {servers} servers", color=COLORS[algorithm],
+                    linestyle=linestyle)
+        if column in WIDE:
+            axis.set_xscale("symlog", linthresh=1)
         axis.set_title(f"k = {k}", fontsize=9)
         axis.set_xlabel(label, fontsize=8)
         axis.set_ylabel("cumulative %", fontsize=8)
         axis.legend(fontsize=6)
     figure.suptitle(title)
     figure.tight_layout()
-    path = figure_path(name)
+    path = figure_path(name, report=name in REPORT)
     figure.savefig(path, dpi=150)
     plt.close(figure)
     return str(path)

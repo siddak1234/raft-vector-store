@@ -1,7 +1,8 @@
-"""Comparisons shared by the experiment analyses (docs/RESEARCH.md §8)."""
+"""Comparisons (docs/RESEARCH.md §8) and figure helpers shared by the experiment analyses."""
 
 import numpy as np
 import pandas as pd
+from matplotlib.patches import Patch
 
 from stats import effect_size, holm, mann_whitney, ratio_of_medians, wilcoxon
 
@@ -65,9 +66,38 @@ def show(title: str, table: pd.DataFrame) -> None:
     print(table.drop(columns=["p"]).to_string(index=False, float_format=lambda v: f"{v:.4g}"))
 
 
-def cdf(axis, values, label: str) -> None:
+def cdf(axis, values, label: str, **style) -> None:
     values = np.sort(np.asarray(values, dtype=float))
     values = values[~np.isnan(values)]
     if len(values) == 0:
         return
-    axis.step(values, np.arange(1, len(values) + 1) / len(values) * 100, where="post", label=label)
+    axis.step(values, np.arange(1, len(values) + 1) / len(values) * 100, where="post", label=label, **style)
+
+
+ALGORITHMS = ["raft", "paxos"]
+NAMES = {"raft": "Raft", "paxos": "Multi-Paxos"}
+COLORS = {"raft": "C0", "paxos": "C1"}
+
+
+def boxes(axis, frame: pd.DataFrame, category: str, column: str, categories: list) -> None:
+    """Box plots of `column` for each value of `category`, Raft and Multi-Paxos side by side.
+    Boxes span the quartiles and whiskers the 5th to 95th percentiles; the line in a box is
+    the median, and points beyond the whiskers are not drawn."""
+    width = 0.38
+    for offset, algorithm in zip((-width / 2, width / 2), ALGORITHMS):
+        data = [frame.loc[(frame[category] == value) & (frame["algorithm"] == algorithm), column]
+                .dropna().to_numpy(float) for value in categories]
+        parts = axis.boxplot(data, positions=np.arange(len(categories)) + offset, widths=width * 0.9,
+                             whis=(5, 95), showfliers=False, patch_artist=True, manage_ticks=False)
+        for box in parts["boxes"]:
+            box.set_facecolor(COLORS[algorithm])
+            box.set_alpha(0.6)
+        for median in parts["medians"]:
+            median.set_color("black")
+    axis.set_xticks(np.arange(len(categories)))
+    axis.set_xticklabels([str(value) for value in categories], fontsize=7)
+
+
+def legend_handles() -> list:
+    """Legend entries for figures drawn with `boxes`."""
+    return [Patch(facecolor=COLORS[a], alpha=0.6, label=NAMES[a]) for a in ALGORITHMS]

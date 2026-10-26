@@ -12,6 +12,7 @@ import pandas as pd
 REPO = Path(__file__).resolve().parent.parent
 RESULTS = REPO / "experiments" / "results"
 FIGURES = Path(__file__).resolve().parent / "figures"
+REPORT_FIGURES = REPO / "docs" / "figures"
 
 
 def latest(experiment: str) -> Path | None:
@@ -66,7 +67,10 @@ def describe(folder: Path) -> str:
     return str(folder.relative_to(REPO))
 
 
-def figure_path(name: str) -> Path:
-    """Return the path for a generated figure, creating analysis/figures/ if needed."""
-    FIGURES.mkdir(exist_ok=True)
-    return FIGURES / name
+def figure_path(name: str, report: bool = False) -> Path:
+    """Return the path for a generated figure, creating its folder if needed. Figures that
+    docs/REPORT.md and docs/SLIDES.md show go to docs/figures/, which is committed; the
+    others go to analysis/figures/, which is not."""
+    folder = REPORT_FIGURES if report else FIGURES
+    folder.mkdir(exist_ok=True)
+    return folder / name

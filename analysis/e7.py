@@ -9,16 +9,43 @@ import json
 import sys
 from pathlib import Path
 
-import pandas as pd
+import matplotlib
 
-from results import REPO, describe, latest
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+
+from compare import ALGORITHMS, COLORS, NAMES  # noqa: E402
+from results import REPO, describe, figure_path, latest  # noqa: E402
 
 MODULES = ["election.rs", "replication.rs", "commit.rs", "lib.rs"]
+MEASURES = ["SLOC", "cyclomatic", "cognitive"]
+
+
+def plot(table: pd.DataFrame) -> str:
+    """SLOC, cyclomatic complexity, and cognitive complexity per module, Raft and Multi-Paxos
+    side by side."""
+    figure, axes = plt.subplots(1, len(MEASURES), figsize=(4 * len(MEASURES), 3.4))
+    width = 0.38
+    positions = np.arange(len(MODULES))
+    for axis, measure in zip(axes, MEASURES):
+        for offset, algorithm in zip((-width / 2, width / 2), ALGORITHMS):
+            values = table[table["algorithm"] == algorithm].set_index("module").reindex(MODULES)[measure]
+            axis.bar(positions + offset, values, width=width, color=COLORS[algorithm], label=NAMES[algorithm])
+        axis.set_xticks(positions, [module.removesuffix(".rs") for module in MODULES], fontsize=8)
+        axis.set_title(f"E7: {measure}", fontsize=9)
+        axis.legend(fontsize=7)
+    figure.tight_layout()
+    path = figure_path("E7_complexity.png", report=True)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    return str(path)
 
 
 def metrics(folder: Path) -> pd.DataFrame:
     rows = []
-    for algorithm in ["raft", "paxos"]:
+    for algorithm in ALGORITHMS:
         for module in MODULES:
             path = folder / f"{algorithm}-{module}.json"
             if not path.is_file():
@@ -61,6 +88,7 @@ def main() -> int:
     totals = table.groupby("algorithm")[["SLOC", "LLOC", "cyclomatic", "cognitive"]].sum()
     print("\nTotals:")
     print(totals.to_string())
+    print(f"Figure: {plot(table)}")
     log = bugs()
     print("\nM20, bugs in docs/BUGLOG.md by algorithm and subproblem:")
     if log.empty:

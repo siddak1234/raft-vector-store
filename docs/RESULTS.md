@@ -69,7 +69,8 @@ algorithms.
 
 `cargo xtask experiment E2`, results in `experiments/results/E2/20261020T173556Z-61c89dd`.
 Five servers, paper-like network (mean round trip 15 ms), 1,000 trials per timeout range.
-Figure: `analysis/figures/E2_figure16.png`.
+Figure: `docs/figures/E2_figure16.png`, drawn from the latest E2 run
+(`E2/20261025T184239Z-ca4f6dd`, Phase 5), whose medians are the same as this run's.
 
 | Timeout range | Median time without a leader | Paper |
 |---|---|---|

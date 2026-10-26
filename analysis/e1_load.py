@@ -9,7 +9,8 @@ A rate is sustained when the median throughput is at least 95% of the offered ra
 median trial has no late command. A trial's latency percentile is empty when it falls among
 its late commands; such a trial counts as slower than every other here, so a median across
 trials can be infinite, and the figure leaves those points out. The figure plots latency
-against achieved throughput, one line per algorithm.
+against achieved throughput, CPU time per commit against the offered rate, and the stalled
+trials and trials with a late command at each rate.
 """
 
 import sys
@@ -21,6 +22,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from compare import ALGORITHMS, COLORS, NAMES  # noqa: E402
 from results import describe, figure_path, latest, load  # noqa: E402
 
 SUSTAINED = 0.95
@@ -52,20 +54,38 @@ def summary(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot(table: pd.DataFrame) -> str:
+    """One column per cluster size: latency against achieved throughput, CPU time per commit
+    against the offered rate, and the trials that stalled or had a late command."""
     sizes = sorted(table["servers"].unique())
-    figure, axes = plt.subplots(1, len(sizes), figsize=(6 * len(sizes), 4), squeeze=False)
-    for axis, servers in zip(axes[0], sizes):
-        for algorithm, group in table[table["servers"] == servers].groupby("algorithm"):
+    figure, axes = plt.subplots(3, len(sizes), figsize=(6 * len(sizes), 10), squeeze=False)
+    width = 700
+    for col, servers in enumerate(sizes):
+        latency, cpu, failures = axes[0][col], axes[1][col], axes[2][col]
+        for offset, algorithm in zip((-width / 2, width / 2), ALGORITHMS):
+            group = table[(table["servers"] == servers) & (table["algorithm"] == algorithm)]
             group = group.sort_values("offered_per_s").replace(np.inf, np.nan)
-            axis.plot(group["throughput"], group["median ms"], marker="o", label=f"{algorithm} median")
-            axis.plot(group["throughput"], group["p99 ms"], marker="x", linestyle="--", label=f"{algorithm} p99")
-        axis.set_xlabel("achieved throughput (commits/s, median of trials)")
-        axis.set_ylabel("latency (ms, median of trials)")
-        axis.set_yscale("log")
-        axis.set_title(f"E1-load, {servers} servers (exploratory)")
-        axis.legend(fontsize=7)
+            color, name = COLORS[algorithm], NAMES[algorithm]
+            latency.plot(group["throughput"], group["median ms"], marker="o", color=color, label=f"{name}, median")
+            latency.plot(group["throughput"], group["p99 ms"], marker="x", linestyle="--", color=color,
+                         label=f"{name}, p99")
+            cpu.plot(group["offered_per_s"], group["CPU ms/commit"], marker="o", color=color, label=name)
+            rates = group["offered_per_s"] + offset
+            failures.bar(rates, group["with late"], width=width, color=color, alpha=0.35,
+                         label=f"{name}, with a late command")
+            failures.bar(rates, group["stalled"], width=width, color=color, label=f"{name}, stalled")
+        latency.set_xlabel("achieved throughput (commits/s, median of trials)")
+        latency.set_ylabel("latency (ms, median of trials)")
+        latency.set_yscale("log")
+        latency.set_title(f"E1-load, {servers} servers (exploratory)")
+        cpu.set_xlabel("offered rate (commands/s)")
+        cpu.set_ylabel("CPU time per commit (ms, median)")
+        cpu.set_yscale("log")
+        failures.set_xlabel("offered rate (commands/s)")
+        failures.set_ylabel(f"trials of {int(table['trials'].max())}")
+        for axis in (latency, cpu, failures):
+            axis.legend(fontsize=7)
     figure.tight_layout()
-    path = figure_path("E1_load.png")
+    path = figure_path("E1_load.png", report=True)
     figure.savefig(path, dpi=150)
     plt.close(figure)
     return str(path)

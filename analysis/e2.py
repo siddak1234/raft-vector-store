@@ -55,7 +55,7 @@ def summarize(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("range (ms)")
 
 
-def plot(frame: pd.DataFrame, name: str, title: str) -> str:
+def plot(frame: pd.DataFrame, name: str, title: str, report: bool = False) -> str:
     figure, (top, bottom) = plt.subplots(2, 1, figsize=(7, 7))
     for axis, labels, log in [(top, TOP, True), (bottom, BOTTOM, False)]:
         for label in labels:
@@ -74,7 +74,7 @@ def plot(frame: pd.DataFrame, name: str, title: str) -> str:
     bottom.set_xlabel("time without leader (ms)")
     top.set_title(title)
     figure.tight_layout()
-    path = figure_path(name)
+    path = figure_path(name, report=report)
     figure.savefig(path, dpi=150)
     plt.close(figure)
     return str(path)
@@ -98,7 +98,7 @@ def main() -> int:
     criteria(summary["median"])
     sensitivity(frame)
     figure = plot(frame, "E2_figure16.png",
-                  "Time to replace a crashed leader (5 servers, ~15 ms round trip)")
+                  "Time to replace a crashed leader (5 servers, ~15 ms round trip)", report=True)
     print(f"\nFigure: {figure}")
     exploratory()
     real(frame)

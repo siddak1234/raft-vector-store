@@ -11,9 +11,39 @@ and C2.
 import math
 import sys
 
-from compare import algorithms, show
-from results import describe, latest, load
-from stats import ALPHA, equivalent, ratio_of_medians
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+
+from compare import ALGORITHMS, COLORS, NAMES, algorithms, cdf, show  # noqa: E402
+from results import describe, figure_path, latest, load  # noqa: E402
+from stats import ALPHA, equivalent, ratio_of_medians  # noqa: E402
+
+TITLES = {"S1": "S1: a data node is killed", "S2": "S2: a data node and the control-plane leader"}
+
+
+def plot(frame) -> str:
+    """The distribution of shard recovery time in each scenario, one line per algorithm and
+    control-plane size."""
+    scenarios = sorted(frame["scenario"].unique())
+    figure, axes = plt.subplots(1, len(scenarios), figsize=(6 * len(scenarios), 3.6), squeeze=False)
+    for axis, scenario in zip(axes[0], scenarios):
+        group = frame[frame["scenario"] == scenario]
+        for servers, linestyle in zip(sorted(group["servers"].unique()), ["-", "--"]):
+            for algorithm in ALGORITHMS:
+                values = group.loc[(group["servers"] == servers) & (group["algorithm"] == algorithm), "recovery_ms"]
+                cdf(axis, values, f"{NAMES[algorithm]}, {servers} servers", color=COLORS[algorithm],
+                    linestyle=linestyle)
+        axis.set_title(f"E8 {TITLES.get(scenario, scenario)}", fontsize=9)
+        axis.set_xlabel("M21 shard recovery time (ms)", fontsize=8)
+        axis.set_ylabel("cumulative %", fontsize=8)
+        axis.legend(fontsize=7)
+    figure.tight_layout()
+    path = figure_path("E8_recovery.png", report=True)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    return str(path)
 
 
 def main() -> int:
@@ -47,6 +77,7 @@ def main() -> int:
             continue
         print(f"  S2, {row['servers']} servers: p (Holm) {row['p (Holm)']:.3g} -> "
               f"{'differs' if row['p (Holm)'] < ALPHA else 'no difference detected'}")
+    print(f"Figure: {plot(frame)}")
     return 0
 
 

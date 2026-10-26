@@ -8,8 +8,13 @@ and M6 are compared in a Holm family of their own.
 
 import sys
 
-from compare import algorithms, show
-from results import describe, latest, load
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+
+from compare import algorithms, boxes, legend_handles, show  # noqa: E402
+from results import describe, figure_path, latest, load  # noqa: E402
 
 METRICS = [
     ("unavailability_ms", "M2 unavailability (ms)"),
@@ -18,6 +23,25 @@ METRICS = [
     ("entries_to_leaders", "M16 entries toward leaders"),
     ("discarded_entries", "M17 discarded entries"),
 ]
+
+
+def plot(sim) -> str:
+    """Box plots of unavailability and leader changes in the simulator, per scenario and
+    cluster size, Raft and Multi-Paxos side by side."""
+    labels = sorted(sim["label"].unique())
+    figure, axes = plt.subplots(1, 2, figsize=(12, 3.8))
+    for axis, (column, label) in zip(axes, METRICS[:2]):
+        boxes(axis, sim, "label", column, labels)
+        axis.set_ylabel(label, fontsize=8)
+        axis.set_xlabel("scenario and servers", fontsize=8)
+    axes[0].set_title("E5: unavailability after the fault", fontsize=9)
+    axes[1].set_title("E5: leader changes, fault to 3 s after it heals", fontsize=9)
+    figure.legend(handles=legend_handles(), loc="lower center", ncol=2, fontsize=8)
+    figure.tight_layout(rect=(0, 0.07, 1, 1))
+    path = figure_path("E5_partitions.png", report=True)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    return str(path)
 
 
 def main() -> int:
@@ -35,6 +59,7 @@ def main() -> int:
     unnecessary = sim[sim["scenario"].isin(["P3", "P5"])]
     print("\nM6, unnecessary leader changes (P3 and P5): mean per trial")
     print(unnecessary.groupby(["scenario", "servers", "algorithm"])["leader_changes"].mean().to_string())
+    print(f"Figure: {plot(sim)}")
     try:
         real = load(folder, "real-partition.csv")
     except FileNotFoundError:
