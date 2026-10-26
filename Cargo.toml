@@ -16,7 +16,6 @@ publish = false
 client = { path = "crates/client" }
 consensus = { path = "crates/consensus" }
 controlplane = { path = "crates/controlplane" }
-datanode = { path = "crates/datanode" }
 modelcheck = { path = "crates/modelcheck" }
 paxos = { path = "crates/paxos" }
 raft = { path = "crates/raft" }

@@ -15,7 +15,8 @@ Usage: cargo xtask <command> [options]
 
 Commands:
   check-repo         Check the repository layout, file rules, and crate dependency rules
-  ci                 Run every check that CI runs: format, lint, test, check-repo, lockfiles
+  ci                 Run every check that CI runs: format, lint, test, check-repo, lockfiles,
+                     analysis tests
   validate [OPTS]    Run the validation campaign: seeds 1-10000 with random faults,
                      for one algorithm (--algorithm raft or paxos; default raft)
   experiment ID      Run experiments/configs/ID.toml and write results
@@ -44,12 +45,16 @@ fn main() -> ExitCode {
     let result = match args.as_slice() {
         [command] if command == "check-repo" => check_repo::run(&root),
         [command] if command == "ci" => ci::run(&root),
-        [command, rest @ ..] if command == "validate" => experiments::validate(&root, rest),
+        [command, rest @ ..] if command == "validate" => {
+            experiments::bench_command(&root, "validate", rest)
+        }
         [command, id, rest @ ..] if command == "experiment" => {
             experiments::experiment(&root, id, rest)
         }
         [command] if command == "figures" => experiments::figures(&root),
-        [command, rest @ ..] if command == "cluster" => experiments::cluster(&root, rest),
+        [command, rest @ ..] if command == "cluster" => {
+            experiments::bench_command(&root, "cluster", rest)
+        }
         [command, name] if command == "dataset" => experiments::dataset(name),
         [command, rest @ ..] if command == "complexity" => {
             experiments::bench_command(&root, "complexity", rest)
@@ -57,7 +62,9 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "demo" => {
             experiments::bench_command(&root, "demo", rest)
         }
-        [command, rest @ ..] if command == "dataplane" => experiments::dataplane(&root, rest),
+        [command, rest @ ..] if command == "dataplane" => {
+            experiments::bench_command(&root, "dataplane", rest)
+        }
         [] => {
             print!("{HELP}");
             Ok(())

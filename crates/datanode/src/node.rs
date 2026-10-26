@@ -204,7 +204,7 @@ impl Node {
                 return;
             }
             // An incarnation the control plane marked dead is never given a lease again;
-            // the node starts over as a new replica (`docs/DESIGN.md` §2).
+            // the node starts over as a new replica (`docs/DESIGN.md` §5, data-node rule 4).
             if map.nodes.get(&me).is_some_and(|info| {
                 info.incarnation == state.incarnation && info.status == NodeStatus::Dead
             }) {

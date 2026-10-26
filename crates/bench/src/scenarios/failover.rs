@@ -219,7 +219,7 @@ mod tests {
     }
 
     /// A new leader sends its no-op to each follower in the input that elects it, so M10
-    /// counts at least one entry per follower. Counting only after that input reported 0.
+    /// counts at least one entry per follower (`docs/RESEARCH.md` amendment A10).
     #[test]
     fn re_sent_entries_count_the_messages_sent_at_election() {
         for seed in 1..=5 {

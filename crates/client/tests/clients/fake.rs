@@ -20,10 +20,10 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{Request, Response, Status};
 
 /// A queue of answers: each call takes the next one, and the last one repeats.
-pub struct Script<T: Clone>(Mutex<VecDeque<T>>);
+struct Script<T: Clone>(Mutex<VecDeque<T>>);
 
 impl<T: Clone> Script<T> {
-    pub fn new(answers: impl IntoIterator<Item = T>) -> Self {
+    fn new(answers: impl IntoIterator<Item = T>) -> Self {
         let answers: VecDeque<T> = answers.into_iter().collect();
         assert!(!answers.is_empty(), "a script needs at least one answer");
         Script(Mutex::new(answers))
@@ -60,9 +60,9 @@ pub struct Control {
     answers: Script<Answer>,
     maps: Script<ShardMap>,
     /// Every proposal received, with when it arrived.
-    pub proposals: Mutex<Vec<(Instant, rpc::Request)>>,
+    proposals: Mutex<Vec<(Instant, rpc::Request)>>,
     /// Every shard-map read received: whether it asked for a linearizable read.
-    pub map_reads: Mutex<Vec<bool>>,
+    map_reads: Mutex<Vec<bool>>,
 }
 
 impl Control {
@@ -192,9 +192,9 @@ pub struct Node {
     writes: Script<WriteResult>,
     searches: Script<SearchResult>,
     /// Every write received.
-    pub received_writes: Mutex<Vec<Write>>,
+    received_writes: Mutex<Vec<Write>>,
     /// Every search received.
-    pub received_searches: Mutex<Vec<SearchQuery>>,
+    received_searches: Mutex<Vec<SearchQuery>>,
 }
 
 impl Node {

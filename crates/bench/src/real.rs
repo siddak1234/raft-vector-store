@@ -661,7 +661,8 @@ pub async fn failover(run: &RunConfig, seed: u64) -> FailoverRow {
     row
 }
 
-/// Faults a real-cluster partition trial can inject on the leader's links.
+/// The faults a real-cluster partition trial can inject: the leader or one follower cut off
+/// from every other server.
 #[derive(Debug, Clone, Copy)]
 pub enum Partition {
     /// The leader alone.

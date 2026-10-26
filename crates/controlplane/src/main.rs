@@ -18,7 +18,7 @@ Options:
                              The heartbeat interval is half the minimum.
   --delay-us D               Inject a one-way delay of D microseconds on average.
   --record                   Keep the measurement log for experiment runners.
-  --seed S                   Seed the algorithm's random numbers with S plus the ID.
+  --seed S                   Seed the algorithm's random numbers with S XOR the ID.
 ";
 
 fn main() -> ExitCode {

@@ -19,13 +19,6 @@ const ANALYSES: &[&str] = &[
     "e8.py",
 ];
 
-/// Runs the validation campaign in release mode.
-pub fn validate(root: &Path, options: &[String]) -> Result<(), String> {
-    let mut args = vec!["validate".to_string()];
-    args.extend_from_slice(options);
-    run_bench(root, &args)
-}
-
 /// Runs the experiment defined in `experiments/configs/<id>.toml` in release mode.
 pub fn experiment(root: &Path, id: &str, options: &[String]) -> Result<(), String> {
     let relative = format!("experiments/configs/{id}.toml");
@@ -40,23 +33,10 @@ pub fn experiment(root: &Path, id: &str, options: &[String]) -> Result<(), Strin
     run_bench(root, &args)
 }
 
-/// Starts a local cluster for demos and manual tests.
-pub fn cluster(root: &Path, options: &[String]) -> Result<(), String> {
-    let mut args = vec!["cluster".to_string()];
-    args.extend_from_slice(options);
-    run_bench(root, &args)
-}
-
-/// Runs a runner command, such as `complexity` or `demo`.
+/// Runs a runner command, such as `validate`, `cluster`, `complexity`, `demo`, or
+/// `dataplane`, in release mode.
 pub fn bench_command(root: &Path, command: &str, options: &[String]) -> Result<(), String> {
     let mut args = vec![command.to_string()];
-    args.extend_from_slice(options);
-    run_bench(root, &args)
-}
-
-/// Runs the Phase 4 data-plane checks.
-pub fn dataplane(root: &Path, options: &[String]) -> Result<(), String> {
-    let mut args = vec!["dataplane".to_string()];
     args.extend_from_slice(options);
     run_bench(root, &args)
 }
@@ -149,8 +129,9 @@ pub fn figures(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Builds the server binaries, which the runner starts for real-cluster experiments and
-/// local clusters, then runs the runner with `args`. Everything is built in release mode.
+/// Builds the server and data-node binaries, which the runner starts for real-cluster
+/// experiments and local clusters, and the `rvs` client binary, which drives a local
+/// cluster by hand; then runs the runner with `args`. Everything is built in release mode.
 fn run_bench(root: &Path, args: &[String]) -> Result<(), String> {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let built = Command::new(&cargo)

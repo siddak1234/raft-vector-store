@@ -160,7 +160,8 @@ async fn renew(
             continue;
         }
 
-        // Register new nodes and new incarnations first (`docs/DESIGN.md` §2).
+        // Register new nodes and new incarnations first (`docs/DESIGN.md` §5, control-plane
+        // leader rule 1).
         let map = Arc::clone(&shared.lock().expect("no thread panicked").map);
         for (request, _) in &batch {
             let node = DataNodeId(request.node);

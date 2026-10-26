@@ -19,16 +19,6 @@ impl SimTime {
     pub fn from_duration(duration: Duration) -> SimTime {
         SimTime(nanos(duration))
     }
-
-    /// Returns the time elapsed since the start of the simulation.
-    pub fn since_start(self) -> Duration {
-        Duration::from_nanos(self.0)
-    }
-
-    /// Returns the number of nanoseconds since the start of the simulation.
-    pub fn as_nanos(self) -> u64 {
-        self.0
-    }
 }
 
 impl Add<Duration> for SimTime {
@@ -69,6 +59,6 @@ mod tests {
         let t = SimTime::from_duration(Duration::from_millis(5));
         assert_eq!((t + Duration::from_millis(2)) - t, Duration::from_millis(2));
         assert_eq!(SimTime::ZERO - t, Duration::ZERO);
-        assert_eq!(t.since_start(), Duration::from_millis(5));
+        assert_eq!(t - SimTime::ZERO, Duration::from_millis(5));
     }
 }

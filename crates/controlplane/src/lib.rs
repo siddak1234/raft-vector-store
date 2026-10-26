@@ -81,8 +81,8 @@ pub struct ServerOptions {
     pub delay_us: u64,
     /// Whether to keep the measurement log for experiment runners.
     pub record: bool,
-    /// Seed of the algorithm's random number generator; each server adds its ID. `None`
-    /// seeds from the clock.
+    /// Seed of the algorithm's random number generator; each server XORs it with its ID.
+    /// `None` seeds from the clock.
     pub seed: Option<u64>,
     /// Lease timing.
     pub leases: LeaseTiming,

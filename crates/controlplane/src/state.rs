@@ -396,6 +396,26 @@ mod tests {
     }
 
     #[test]
+    fn dropping_a_collection_removes_it_and_its_shards() {
+        let mut state = StateMachine::new();
+        register(&mut state, 4);
+        create(&mut state, 10);
+        let drop = || ControlCommand::DropCollection {
+            name: "glove".into(),
+        };
+        assert_eq!(state.apply(11, &request(9, 2, drop())), Outcome::Applied);
+        assert!(state.map().collections.is_empty());
+        assert!(state.map().shards.is_empty());
+        assert_eq!(state.map().version, 11);
+        // The collection is gone, so dropping it again is refused and changes nothing.
+        assert!(matches!(
+            state.apply(12, &request(9, 3, drop())),
+            Outcome::Rejected(_)
+        ));
+        assert_eq!(state.map().version, 11);
+    }
+
+    #[test]
     fn a_retried_command_is_applied_once() {
         let mut state = StateMachine::new();
         register(&mut state, 3);

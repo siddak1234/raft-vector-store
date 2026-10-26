@@ -66,7 +66,6 @@ const ALLOWED_DEPS: &[(&str, &[&str])] = &[
             "modelcheck",
             "rpc",
             "controlplane",
-            "datanode",
             "client",
         ],
     ),

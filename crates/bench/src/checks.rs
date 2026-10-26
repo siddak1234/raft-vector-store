@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rpc::{DataNodeEvents, Epoch, ShardKey};
 
-/// A violation of C1, described.
+/// A violation of C1 or C2, described.
 pub type Violation = String;
 
 /// C1, at most one serving primary: checks the requests every data node served as

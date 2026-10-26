@@ -1,4 +1,4 @@
-//! E6: exhaustive model checking (`docs/RESEARCH.md` §6, amended by A4).
+//! E6: exhaustive model checking (`docs/RESEARCH.md` §6, amended by A5.4).
 //!
 //! Each run explores every state of one algorithm reachable within its bounds, depth-first
 //! with Stateright, and records metric M14: the number of distinct states of the compared

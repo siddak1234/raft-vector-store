@@ -45,14 +45,8 @@ impl Sub for Counts {
 pub struct Metrics {
     /// Every message sent between servers.
     pub sent: Counts,
-    /// Messages sent, by type ([`consensus::Consensus::message_kind`]).
-    pub by_kind: BTreeMap<&'static str, Counts>,
     /// Messages sent, by sending server.
     pub by_sender: BTreeMap<NodeId, Counts>,
-    /// Messages lost: dropped by the network or sent to a stopped server.
-    pub dropped: u64,
-    /// Messages delivered to a running server.
-    pub delivered: u64,
     /// Log entries carried by messages delivered to a candidate or leader (metric M16).
     pub entries_to_leaders: u64,
     /// Storage syncs that wrote something.
@@ -64,15 +58,8 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub(crate) fn record_send(
-        &mut self,
-        from: NodeId,
-        kind: &'static str,
-        bytes: u64,
-        entries: u64,
-    ) {
+    pub(crate) fn record_send(&mut self, from: NodeId, bytes: u64, entries: u64) {
         self.sent.add(bytes, entries);
-        self.by_kind.entry(kind).or_default().add(bytes, entries);
         self.by_sender.entry(from).or_default().add(bytes, entries);
     }
 
@@ -89,10 +76,7 @@ impl Metrics {
         }
         Metrics {
             sent: self.sent - earlier.sent,
-            by_kind: diff(&self.by_kind, &earlier.by_kind),
             by_sender: diff(&self.by_sender, &earlier.by_sender),
-            dropped: self.dropped.saturating_sub(earlier.dropped),
-            delivered: self.delivered.saturating_sub(earlier.delivered),
             entries_to_leaders: self
                 .entries_to_leaders
                 .saturating_sub(earlier.entries_to_leaders),
@@ -117,9 +101,9 @@ mod tests {
     #[test]
     fn since_subtracts_an_earlier_copy() {
         let mut metrics = Metrics::default();
-        metrics.record_send(NodeId(1), "A", 10, 1);
+        metrics.record_send(NodeId(1), 10, 1);
         let earlier = metrics.clone();
-        metrics.record_send(NodeId(2), "B", 5, 0);
+        metrics.record_send(NodeId(2), 5, 0);
         metrics.fsyncs += 3;
         metrics.storage_bytes += 40;
 
@@ -128,7 +112,6 @@ mod tests {
         assert_eq!(interval.sent.bytes, 5);
         assert_eq!(interval.fsyncs, 3);
         assert_eq!(interval.storage_bytes, 40);
-        assert!(!interval.by_kind.contains_key("A"));
         assert_eq!(interval.sent_by(NodeId(2)).messages, 1);
         assert_eq!(interval.sent_by(NodeId(1)).messages, 0);
     }

@@ -65,18 +65,6 @@ impl ClusterConfig {
             .find(|s| s.id == id.0)
             .map(|s| s.address.as_str())
     }
-
-    /// Writes a cluster file for servers `1..=n` on consecutive ports from `first_port`.
-    pub fn local(n: u64, first_port: u16) -> String {
-        (1..=n)
-            .map(|id| {
-                format!(
-                    "[[server]]\nid = {id}\naddress = \"127.0.0.1:{}\"\n\n",
-                    first_port + id as u16 - 1
-                )
-            })
-            .collect()
-    }
 }
 
 #[cfg(test)]
@@ -85,7 +73,15 @@ mod tests {
 
     #[test]
     fn parses_a_local_cluster() {
-        let config = ClusterConfig::parse(&ClusterConfig::local(3, 7101)).expect("valid");
+        let text = (1..=3)
+            .map(|id| {
+                format!(
+                    "[[server]]\nid = {id}\naddress = \"127.0.0.1:{}\"\n\n",
+                    7100 + id
+                )
+            })
+            .collect::<String>();
+        let config = ClusterConfig::parse(&text).expect("valid");
         assert_eq!(config.ids().len(), 3);
         assert_eq!(config.address(consensus::NodeId(2)), Some("127.0.0.1:7102"));
     }

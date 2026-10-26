@@ -228,18 +228,6 @@ impl LocalCluster {
         }
     }
 
-    /// Restarts a killed data node. It comes back empty, with a new incarnation.
-    ///
-    /// # Errors
-    ///
-    /// Returns a description if the process cannot start.
-    pub fn restart_data(&mut self, id: u64) -> Result<(), String> {
-        if self.data_children.contains_key(&id) {
-            return Ok(());
-        }
-        self.spawn_data(id)
-    }
-
     /// Stops every server and data node.
     pub fn stop(&mut self) {
         let ids: Vec<u64> = self.data_children.keys().copied().collect();

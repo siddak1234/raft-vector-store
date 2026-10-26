@@ -1,7 +1,8 @@
 //! The experiment procedures (`docs/RESEARCH.md` §6 and §9).
 //!
-//! Each procedure runs one trial: one simulation with one seed. The procedures are generic
-//! over the algorithm, so Raft and Multi-Paxos follow exactly the same steps.
+//! Each procedure runs one trial: one simulation with one seed, or, on the real cluster, one
+//! set of processes. The procedures are generic over the algorithm, so Raft and Multi-Paxos
+//! follow exactly the same steps.
 
 pub mod failover;
 pub mod figure16;

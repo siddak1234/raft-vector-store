@@ -38,7 +38,11 @@ pub struct VectorRow {
     /// Metric M21.
     pub(crate) recovery_ms: Option<f64>,
     pub(crate) writes: usize,
+    /// The number of C2 violations (`checks::no_lost_writes`): one for each in-sync replica
+    /// missing any acknowledged write, and one for each shard with no in-sync replica.
     pub(crate) lost_writes: usize,
+    /// The number of C1 violations (`checks::single_primary`): one for each request served
+    /// by a second data node at the same epoch, or at an epoch older than one already served.
     pub(crate) double_primaries: usize,
     pub(crate) violations: usize,
 }
@@ -94,6 +98,8 @@ pub async fn trial(
     {
         return row;
     }
+    // 4 writing clients and 4 shards, fixed by `docs/RESEARCH.md` §6 (E8); the run's
+    // `clients` setting only labels the rows.
     let Ok(writers) = start_writers(&env, 4, dataset.dimension, 4) else {
         return row;
     };

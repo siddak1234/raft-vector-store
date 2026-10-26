@@ -126,7 +126,8 @@ fn a_restarted_follower_catches_up() {
     sim.stop_clients();
     sim.run_until(at(4_500));
 
-    // The restarted follower has applied everything the leader committed.
+    // The restarted follower has caught up: it has applied all but at most the last 10
+    // entries the leader committed.
     let leader_commit = sim.status(leader).expect("running").commit_index;
     assert!(sim.applied(follower) >= consensus::LogIndex(leader_commit.0.saturating_sub(10)));
     sim.check_durability();

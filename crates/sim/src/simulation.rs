@@ -1,6 +1,6 @@
 //! The simulation driver.
 
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use consensus::{
@@ -38,7 +38,9 @@ pub struct SimConfig {
     /// Whether to encode every message to count its bytes. Encoding costs time, so long
     /// safety runs turn it off.
     pub count_bytes: bool,
-    /// Whether to run the Raft-only checks: log matching and leader completeness.
+    /// Whether to check leader completeness, which only Raft guarantees, whenever a server
+    /// becomes leader. Log matching, the other Raft-only check, runs only when the caller
+    /// calls [`Simulation::check_log_matching`].
     pub raft_checks: bool,
     /// Servers first start at times drawn uniformly from `[0, start_spread)`. Zero starts
     /// every server at time zero. A spread avoids the endless split votes that identical
@@ -64,9 +66,9 @@ impl Default for SimConfig {
     }
 }
 
-/// Hooks for measurements that need an algorithm's own message type, such as Raft's
+/// A hook for measurements that need an algorithm's own message type, such as Raft's
 /// count of votes refused because of a stale log (metric M5). The shared simulator calls
-/// them but never looks inside messages itself.
+/// it but never looks inside messages itself.
 pub trait Observer<C: Consensus> {
     /// Called just before `message` is handed to server `to`.
     fn on_deliver(
@@ -79,11 +81,6 @@ pub trait Observer<C: Consensus> {
     ) {
         let _ = (now, from, to, message, receiver);
     }
-
-    /// Called after a server finishes processing an input.
-    fn after_input(&mut self, now: SimTime, server: ServerView<'_>) {
-        let _ = (now, server);
-    }
 }
 
 impl<C: Consensus> Observer<C> for () {}
@@ -91,9 +88,8 @@ impl<C: Consensus> Observer<C> for () {}
 /// A read-only view of one server.
 #[derive(Debug, Clone, Copy)]
 pub struct ServerView<'a> {
-    /// The server's ID.
-    pub id: NodeId,
-    /// The server's status, or `None` while it is stopped.
+    /// The server's status. Messages are delivered only to running servers, so `on_deliver`
+    /// always receives `Some`.
     pub status: Option<Status>,
     /// The server's storage.
     pub storage: &'a MemStorage,
@@ -120,10 +116,6 @@ impl Reply {
 /// The answer to a [`Simulation::confirm_leadership`] request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Confirmation {
-    /// When the answer was produced.
-    pub time: SimTime,
-    /// The server that answered.
-    pub server: NodeId,
     /// The request answered.
     pub request: RequestId,
     /// The read index if leadership was confirmed, or `None` if the server stopped leading.
@@ -193,8 +185,8 @@ struct Slot<C> {
     crash_on_next_input: bool,
     /// The index the server's state machine expects to apply next.
     next_apply: u64,
-    /// Client commands this server accepted and has not yet applied, with the attempt.
-    pending: BTreeMap<(u32, u64), u64>,
+    /// Client commands this server accepted and has not yet applied.
+    pending: BTreeSet<(u32, u64)>,
 }
 
 fn timer_slot(timer: Timer) -> usize {
@@ -244,7 +236,8 @@ impl<C: Consensus> Simulation<C> {
 }
 
 impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
-    /// Starts a simulation: creates every server at time zero and starts the clients.
+    /// Starts a simulation: creates every server, at time zero or, with a `start_spread`, at
+    /// a random time within it, and starts the clients.
     ///
     /// # Panics
     ///
@@ -266,7 +259,7 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
                 timer_generation: [0; 2],
                 crash_on_next_input: false,
                 next_apply: 1,
-                pending: BTreeMap::new(),
+                pending: BTreeSet::new(),
             })
             .collect();
         let clients = (0..config.clients)
@@ -642,14 +635,6 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
         self.checker
             .on_status(self.now, slot, server.id, status, server.storage.mem());
         self.max_log_gaps = self.max_log_gaps.max(server.storage.gaps());
-        self.observer.after_input(
-            self.now,
-            ServerView {
-                id: server.id,
-                status: Some(status),
-                storage: server.storage.mem(),
-            },
-        );
     }
 
     fn carry_out(&mut self, slot: usize, output: Output<C::Message>) {
@@ -673,14 +658,10 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
                 request,
                 read_index,
             } => self.confirmations.push(Confirmation {
-                time: self.now,
-                server: self.ids[slot],
                 request,
                 read_index: Some(read_index),
             }),
             Output::LeadershipLost { request } => self.confirmations.push(Confirmation {
-                time: self.now,
-                server: self.ids[slot],
                 request,
                 read_index: None,
             }),
@@ -695,22 +676,18 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
         } else {
             0
         };
-        self.metrics
-            .record_send(from, C::message_kind(&message), bytes, entries);
-        match self.network.route(from, to, entries > 0) {
-            Route::Dropped => self.metrics.dropped += 1,
-            Route::Delivered { delay, duplicate } => {
-                if let Some(extra) = duplicate {
-                    let copy = Event::Deliver {
-                        from,
-                        to,
-                        message: message.clone(),
-                    };
-                    self.queue.push(self.now + extra, copy);
-                }
-                self.queue
-                    .push(self.now + delay, Event::Deliver { from, to, message });
+        self.metrics.record_send(from, bytes, entries);
+        if let Route::Delivered { delay, duplicate } = self.network.route(from, to, entries > 0) {
+            if let Some(extra) = duplicate {
+                let copy = Event::Deliver {
+                    from,
+                    to,
+                    message: message.clone(),
+                };
+                self.queue.push(self.now + extra, copy);
             }
+            self.queue
+                .push(self.now + delay, Event::Deliver { from, to, message });
         }
     }
 
@@ -724,7 +701,7 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
         let Some(key) = client::decode(command) else {
             return;
         };
-        if server.pending.remove(&key).is_some() {
+        if server.pending.remove(&key) {
             let delay = self.network.delay();
             let reply = Event::ClientReply {
                 client: key.0 as usize,
@@ -789,11 +766,9 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
         let slot = self.slot(to);
         let server = &self.servers[slot];
         let Some(node) = &server.node else {
-            self.metrics.dropped += 1;
             return;
         };
         let status = node.status();
-        self.metrics.delivered += 1;
         if matches!(status.role, Role::Candidate | Role::Leader) {
             self.metrics.entries_to_leaders += C::entry_count(&message) as u64;
         }
@@ -803,7 +778,6 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
             to,
             &message,
             ServerView {
-                id: to,
                 status: Some(status),
                 storage: server.storage.mem(),
             },
@@ -908,7 +882,7 @@ impl<C: Consensus, O: Observer<C>> Simulation<C, O> {
         let key = (client as u32, seq);
         let command = client::encode(key.0, seq, self.config.command_bytes);
         // Registered first: a one-server cluster applies the command inside `propose`.
-        self.servers[slot].pending.insert(key, attempt);
+        self.servers[slot].pending.insert(key);
         if let Some(Err(NotLeader { leader })) = self.input(slot, Input::Propose(command)) {
             self.servers[slot].pending.remove(&key);
             let delay = self.network.delay();

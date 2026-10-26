@@ -10,7 +10,7 @@
 //!    nodes still send it heartbeats.
 //! 4. **Primary partition.** Cut a shard's primary off from the control plane.
 //!
-//! Every test also runs the single-primary check (C1) and the no-lost-write check (C2).
+//! Tests 2–4 also run the single-primary check (C1) and the no-lost-write check (C2).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

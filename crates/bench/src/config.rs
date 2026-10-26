@@ -45,7 +45,8 @@ pub struct RunConfig {
     /// First and last seed, inclusive. Required by every scenario except model checking.
     #[serde(default)]
     pub seeds: Option<[u64; 2]>,
-    /// Number of closed-loop clients (steady scenario only).
+    /// Number of closed-loop clients (steady, failover, recovery, and partition scenarios).
+    /// The vectors scenario always runs 4 writers and records this value only in its rows.
     #[serde(default)]
     pub clients: usize,
     /// Offered load in commands per second (load scenario only).
@@ -55,7 +56,7 @@ pub struct RunConfig {
     /// Defaults to 150–300 ms.
     #[serde(default)]
     pub election_timeout_ms: Option<[u64; 2]>,
-    /// Commands the leader appends just before it crashes (failover scenario only).
+    /// Commands the leader appends just before it crashes (failover and recovery scenarios).
     #[serde(default)]
     pub uncommitted: usize,
     /// Commands the leader commits while a follower is away (catch-up scenario only).

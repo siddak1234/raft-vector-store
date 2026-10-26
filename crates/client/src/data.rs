@@ -72,16 +72,6 @@ impl VectorClient {
         }
     }
 
-    /// The control-plane client.
-    pub fn control(&mut self) -> &mut ControlClient {
-        &mut self.control
-    }
-
-    /// The cached shard map.
-    pub fn map(&self) -> &ShardMap {
-        &self.map
-    }
-
     /// Reads the shard map again.
     ///
     /// # Errors

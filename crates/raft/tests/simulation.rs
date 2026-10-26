@@ -106,7 +106,7 @@ fn a_restarted_follower_catches_up() {
     sim.stop_clients();
     sim.run_until(at(4_500));
 
-    // The restarted follower holds the leader's whole log and has applied all of it again.
+    // The restarted follower has caught up: its log ends within 10 entries of the leader's.
     let leader_last = sim.storage(leader).last_index();
     assert!(sim.storage(follower).last_index() >= LogIndexBound::below(leader_last));
     sim.check_durability();

@@ -230,8 +230,8 @@ pub enum ControlCommand {
         /// The epoch the shard is expected to have.
         epoch: Epoch,
     },
-    /// Changes nothing. Experiment E1's clients send it, padded to the protocol's command
-    /// size (`docs/RESEARCH.md` §3).
+    /// Changes nothing. Every command the real-cluster experiments send is one, padded to
+    /// the protocol's command size (`docs/RESEARCH.md` §3).
     Bench {
         /// Filler bytes.
         padding: Vec<u8>,
@@ -241,7 +241,7 @@ pub enum ControlCommand {
 /// A command with its client session, so a retried command is applied once (Raft §8).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Request {
-    /// The client's ID, unique per client process.
+    /// The client's ID, unique per client session; one process can run many sessions.
     pub client: u64,
     /// The client's sequence number for this command, increasing from 1.
     pub seq: u64,
@@ -558,7 +558,7 @@ pub mod delay {
 // ----- Measurement -----------------------------------------------------------------------
 
 /// Microseconds since the Unix epoch. Every process on one machine reads the same clock,
-/// so times from different processes can be compared (`docs/RESEARCH.md` §3).
+/// so times from different processes can be compared (`docs/RESEARCH.md` amendment A4.7).
 pub fn now_micros() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

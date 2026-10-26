@@ -84,7 +84,8 @@ pub trait Consensus: Sized {
     fn status(&self) -> Status;
 
     /// Returns the name of a message's type, such as `"AppendEntries"`, so shared code can
-    /// count messages by type (metrics M4, M9, and M18 in `docs/RESEARCH.md`).
+    /// name messages without reading them: E7 counts the message types (metric M18 in
+    /// `docs/RESEARCH.md`), and the real cluster's measurement log records each type.
     fn message_kind(message: &Self::Message) -> &'static str;
 
     /// Returns the number of log entries a message carries, so shared code can count

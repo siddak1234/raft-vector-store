@@ -26,7 +26,8 @@ fn bench() -> ControlCommand {
     }
 }
 
-/// The leader, if exactly one server reports leading the highest term.
+/// The server that reports leading the highest term, with that term; if two report the
+/// same term, the first one asked.
 async fn leader(client: &ControlClient, servers: &[(u64, String)]) -> Option<(u64, u64)> {
     let mut best: Option<(u64, u64)> = None;
     for (id, _) in servers {

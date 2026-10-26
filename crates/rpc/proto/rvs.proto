@@ -40,8 +40,8 @@ service ControlPlane {
   // The server's measurement log, for experiment runners.
   rpc Events(Empty) returns (EventsReply);
   // Experiment procedures: appends commands and, optionally, sends a heartbeat round,
-  // then stops the server without sending anything further (docs/RESEARCH.md §6, E2
-  // and E3).
+  // then stops the server without sending anything further (the crash procedure of E2
+  // and E3, docs/RESEARCH.md amendment A4.8).
   rpc Crash(CrashRequest) returns (CrashReply);
 }
 
@@ -142,7 +142,8 @@ message FaultsRequest {
 }
 
 message EventsReply {
-  // An encoded `rpc::Events`.
+  // An encoded `rpc::Events` from a control-plane server, or `rpc::DataNodeEvents` from a
+  // data node.
   bytes events = 1;
 }
 
@@ -179,7 +180,7 @@ message InspectReply {
 }
 
 message WriteRequest {
-  // An encoded `rpc::WriteOp` with its shard and epoch.
+  // An encoded `rpc::Write`: the operation with its shard and epoch.
   bytes write = 1;
 }
 

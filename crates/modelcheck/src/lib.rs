@@ -3,8 +3,8 @@
 //!
 //! The adapter is a driver in the sense of the `Consensus` driver contract: it delivers one
 //! input at a time, syncs storage, and carries out the outputs. Instead of choosing one
-//! order of events, it lets Stateright explore every order breadth-first, within the bounds
-//! of `docs/RESEARCH.md` §6 (E6):
+//! order of events, it lets Stateright explore every order, depth-first in E6, within the
+//! bounds of `docs/RESEARCH.md` amendment A5.4:
 //!
 //! - a fixed number of servers, which never crash;
 //! - an unordered, non-duplicating network: any message in flight may be delivered next, a
@@ -29,7 +29,7 @@ use consensus::{
 };
 use stateright::{Model, Property};
 
-/// The limits of the search (`docs/RESEARCH.md` §6, E6).
+/// The limits of the search (`docs/RESEARCH.md` amendment A5.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Bounds {
     /// Number of servers.
@@ -115,7 +115,7 @@ pub struct ConsensusModel<C> {
 
 /// The fingerprints of the compared fields of every state generated, in shards so that
 /// search threads rarely wait for each other.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Projections {
     shards: Vec<Mutex<HashSet<u64>>>,
 }
@@ -393,8 +393,6 @@ fn sort_network<M: Hash + Eq>(network: &mut [Envelope<M>]) {
 
 #[cfg(test)]
 mod tests {
-    use consensus::{Command, Entry, LogIndex, MemStorage, Payload, Storage, Term};
-
     use super::Envelope;
 
     #[test]
@@ -414,20 +412,5 @@ mod tests {
         super::sort_network(&mut x);
         super::sort_network(&mut y);
         assert_eq!(x, y);
-    }
-
-    #[test]
-    fn memstorage_is_compared_by_content() {
-        let mut a = MemStorage::new();
-        a.put(
-            LogIndex(1),
-            Entry {
-                term: Term(1),
-                payload: Payload::Command(Command(vec![1])),
-            },
-        );
-        a.sync();
-        let b = a.clone();
-        assert_eq!(a, b);
     }
 }

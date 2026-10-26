@@ -1,6 +1,6 @@
-//! The few measurements that need an algorithm's own message type, such as Raft's votes
-//! refused for a stale log (metric M5). The driver calls them but never looks inside
-//! messages itself, so the rest of the server treats both algorithms the same.
+//! The one measurement that needs an algorithm's own message type: Raft's votes refused for
+//! a stale log (metric M5). The driver calls it but never looks inside messages itself, so
+//! the rest of the server treats both algorithms the same.
 
 use consensus::{Consensus, Status, Storage};
 use paxos::Paxos;

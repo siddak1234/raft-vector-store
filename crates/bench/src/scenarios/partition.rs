@@ -1,4 +1,4 @@
-//! E5: partitions (`docs/RESEARCH.md` §6, with details in amendment A4).
+//! E5: partitions (`docs/RESEARCH.md` §6, with details in amendment A5.3).
 //!
 //! 1. Run 4 clients in steady state until a leader's no-op is committed, then for a
 //!    uniformly random time between 1 and 2 seconds.

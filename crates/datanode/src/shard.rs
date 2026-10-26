@@ -236,19 +236,11 @@ pub fn distance(metric: Metric, query: &[f32], query_norm: f32, vector: &[f32]) 
     }
 }
 
-/// Merges per-shard results into the overall `k` nearest, closest first.
-pub fn merge(results: impl IntoIterator<Item = Vec<Neighbor>>, k: usize) -> Vec<Neighbor> {
-    let mut all: Vec<Neighbor> = results.into_iter().flatten().collect();
-    all.sort_by(|a, b| a.distance.total_cmp(&b.distance).then(a.id.cmp(&b.id)));
-    all.truncate(k);
-    all
-}
-
 #[cfg(test)]
 mod tests {
     use rpc::{Epoch, LogEntry, Metric, WriteOp};
 
-    use super::{ShardReplica, Stored, merge};
+    use super::{ShardReplica, Stored};
 
     fn upsert(id: u64, x: f32) -> WriteOp {
         WriteOp::Upsert {
@@ -352,25 +344,5 @@ mod tests {
         });
         let hits = primary.search(&[1.0, 0.1], 2);
         assert_eq!(hits[0].id, 1);
-    }
-
-    #[test]
-    fn merging_keeps_the_overall_nearest() {
-        let a = vec![
-            rpc::Neighbor {
-                id: 1,
-                distance: 0.5,
-            },
-            rpc::Neighbor {
-                id: 2,
-                distance: 0.9,
-            },
-        ];
-        let b = vec![rpc::Neighbor {
-            id: 3,
-            distance: 0.1,
-        }];
-        let ids: Vec<u64> = merge([a, b], 2).iter().map(|h| h.id).collect();
-        assert_eq!(ids, [3, 1]);
     }
 }

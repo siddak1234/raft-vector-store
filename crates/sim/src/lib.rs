@@ -7,8 +7,8 @@
 //!
 //! The simulator is the driver described in the `Consensus` driver contract: it delivers
 //! one input at a time, syncs storage after every input, and then carries out the outputs.
-//! It depends only on the `consensus` crate, so it cannot treat Raft and Multi-Paxos
-//! differently.
+//! Of the workspace's crates it depends only on `consensus`, so it cannot treat Raft and
+//! Multi-Paxos differently.
 //!
 //! While it runs, the simulator checks the safety properties in `docs/RESEARCH.md` §9 and
 //! counts the metrics that must be measured in shared code (`docs/RESEARCH.md` §5).
