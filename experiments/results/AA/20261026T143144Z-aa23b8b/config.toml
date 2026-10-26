@@ -1,0 +1,48 @@
+# A/A validation (docs/RESEARCH.md §9.2): Raft compared with itself on disjoint seeds,
+# analyzed as unpaired samples. Any difference found here comes from the harness, not the
+# algorithm.
+
+id = "AA"
+description = "Raft against itself on disjoint seeds, for E1 and E3"
+
+[[run]]
+scenario = "steady"
+label = "E1"
+arm = "A"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 16
+seeds = [1, 1000]
+
+[[run]]
+scenario = "steady"
+label = "E1"
+arm = "B"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 16
+seeds = [1001, 2000]
+
+[[run]]
+scenario = "failover"
+label = "E3"
+arm = "A"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1, 1000]
+
+[[run]]
+scenario = "failover"
+label = "E3"
+arm = "B"
+algorithm = "raft"
+servers = 3
+network = "paper"
+clients = 4
+uncommitted = 10
+seeds = [1001, 2000]
