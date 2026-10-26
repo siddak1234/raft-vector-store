@@ -1,6 +1,7 @@
 # Raft vs. Multi-Paxos on a Vector Store Control Plane
 
 **ECE 382N Distributed Systems, Fall 2026: Final Report**
+
 **Siddak Bhatia (sb56878), Harrison Held (HWH492)**
 
 > **Status:** complete. Results are from the Phase 5 runs at `data-v4` and the reruns at
@@ -24,7 +25,7 @@ but not with 16: there Multi-Paxos was up to 11% faster, because Raft's follower
 messages that arrive out of order. After a leader failure, Raft re-sent 15–64 times fewer
 entries, but its election restriction cost extra rounds, so Multi-Paxos had a leader 2–11%
 sooner in the simulator; on a flapping link the same restriction kept Raft stable while
-Multi-Paxos changed leaders 15 times in 10 s. Raft's logs never had gaps and its
+Multi-Paxos changed leaders a median of 15 times. Raft's logs never had gaps and its
 implementation is smaller, but at the one model-checking bound both algorithms completed,
 Multi-Paxos reached 3.7% fewer states. Shard recovery in the vector store took 3.4–5.6 s
 under both, set by its lease.
@@ -276,10 +277,10 @@ before the data it affects unless it records an outcome:
   to catch a follower up on 1,000 entries. Both leaders now fill the window. Every
   experiment, the validation campaign, and both A/A tests are rerun. The `data-v1` E4
   results are kept and reported as superseded.
-- **A8**, made before any run at `data-v2`, adds measures that industry comparisons
-  commonly report and the protocol lacked: p99.9 and maximum latency, disk syncs and bytes
-  per commit, and CPU time and memory, all descriptive and untested, and the exploratory
-  E1-load sweep. Measurement code changed, not the algorithms.
+- **A8**, made before any run at `data-v2`, adds measures the protocol lacked: p99.9 and
+  maximum latency, disk syncs and bytes per commit, and CPU time and memory, all
+  descriptive and untested, and the exploratory E1-load sweep. Measurement code changed,
+  not the algorithms.
 - **A9**, made before any run at `data-v3`, fixes an analysis bug: a comparison without data
   would have read as significant or as no difference. The code that runs the experiments is
   unchanged, and every run is made at `data-v4`.
@@ -307,7 +308,7 @@ because each server may campaign only in the terms it owns.
 
 Both A/A tests passed: no Holm-corrected test was significant, and every E1 ratio interval
 lay within [0.95, 1.05] (simulator [1.000, 1.001] for median latency; real cluster
-[0.998, 1.003]). The harness shows no difference where there is none.
+[0.998, 1.003]).
 
 E2 met R1 and failed R2, as in Phase 1: on the paper-like network a round trip can exceed
 the shortest election timeouts, so 12–24 ms elects no faster than 25–50 ms (73.3 against
@@ -405,8 +406,9 @@ command to the crashed leader waits out its 500 ms reply timeout before it retri
 **Partitions (E5).** Unavailability differed by at most 3.5% in every scenario. In P3 and P5
 it is identical for every seed: M2 times the first command after the fault, which commits
 before P5's link first changes, so it does not measure the flapping. Leader changes (M6)
-were a median of 1 for both algorithms except in P5, where Multi-Paxos changed leaders 15
-times in 10 s against Raft's 1–2. In an exploratory trace (seeds 1–20) the follower cut off
+were a median of 1 for both algorithms except in P5, where, over the 10 s of flapping and
+the 3 s after, Multi-Paxos changed leaders 15 times against Raft's 1–2. In an exploratory
+trace (seeds 1–20) the follower cut off
 from the leader stood for election 314 times under Multi-Paxos and won all 314, and
 leadership alternated between it and the old leader. Under Raft it stood 101 times and won
 none: the other servers refused its vote requests 193 times because its log was behind. On the real
@@ -492,7 +494,7 @@ served a shard as primary at once. Shard recovery (M21), median:
 
 Every recovery took at least 3,385 ms, above the 2.5 s minimum the lease design predicts:
 the control plane cannot reassign a shard until the old primary's lease (3 s plus a 0.5 s
-margin. has expired. S1's intervals are wide rather than shifted, so the test cannot show
+margin) has expired. S1's intervals are wide rather than shifted, so the test cannot show
 equivalence; S2's medians are within 0.3%.
 
 ### 4.8 Superseded results
@@ -573,7 +575,7 @@ equivalence; S2's medians are within 0.3%.
   harness as much as to the algorithms. Storage calls `fsync(2)` (amendment A6), which
   survives process crashes, the only faults injected, but not necessarily power loss.
 - E8's vector store differs from production use. It holds 100,000 GloVe vectors of 25
-  dimensions, where current embeddings have 768–3,072 (VectorDBBench). Clients write one
+  dimensions, where current embeddings have 768–3,072 (VDBBench). Clients write one
   vector per request and wait for it, where vector databases recommend batches: 64–256
   points per request for Qdrant, and up to 1,000 records or 2 MB for Pinecone. No searches
   run during the trials, and search is brute force rather than an approximate index such as
@@ -588,7 +590,7 @@ equivalence; S2's medians are within 0.3%.
 - Holm–Bonferroni correction is applied within each experiment, not across experiments.
 - Paired seeds remove variation caused by different fault schedules in the simulator; the
   real cluster is analyzed unpaired.
-- The ±5% equivalence margin.was chosen before the data, but it is a judgment: smaller
+- The ±5% equivalence margin was chosen before the data, but it is a judgment: smaller
   differences are reported as equivalent.
 - Analyses decided after seeing data, such as E2 on the LAN-like network and the E4c check
   that found the bug, are labeled exploratory and are not used to decide any hypothesis.
@@ -620,7 +622,8 @@ newest entries loses its round, so Raft needed more than one round in 31–39% o
 against 10–18% for Multi-Paxos, and Multi-Paxos had a leader 2–11% sooner. Unavailability,
 set mostly by the clients' 500 ms retry timeout, differed by less than 0.6%. The same
 restriction keeps a follower on a flapping link from taking over: it won none of 101
-elections under Raft and all 314 under Multi-Paxos, which changed leaders 15 times in 10 s.
+elections under Raft and all 314 under Multi-Paxos, which changed leaders a median of 15
+times.
 
 **Coherency.** Raft's logs never had gaps, and Multi-Paxos's always did. Two other
 predictions did not hold as measured. At the one model-checking bound both algorithms
@@ -638,8 +641,9 @@ and neither equivalence nor a difference could be shown.
 **The method.** Four defects came to light after data collection began, found by checking
 unexpected results, pilot runs, or the analysis code: a flow-control bug in both leaders, a
 reply-size limit in the harness, missing-data handling in the analysis, and a miscounted
-metric. Each was fixed, logged in `docs/BUGLOG.md`, and recorded with a dated amendment, and
-every run it affected was repeated.
+metric. Each was fixed and logged in `docs/BUGLOG.md`. The reply-size limit showed up in a
+pilot run, and no committed result is missing a value because of it; each of the other
+three has a dated amendment (A7, A9, A10), and every run it affected was repeated.
 
 ## References
 

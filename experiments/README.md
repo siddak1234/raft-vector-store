@@ -31,14 +31,16 @@ E7 has no config: `cargo xtask complexity` runs it (`docs/RESEARCH.md` §6).
 
 ## `results/`
 
-Written only by the experiment runner (`cargo xtask experiment <id>`, added in Phase 1).
-Each run gets its own folder:
+Written only by the experiment runner, through `cargo xtask experiment <id>`,
+`cargo xtask validate`, `cargo xtask complexity` (E7), and `cargo xtask dataplane`. Each
+run gets its own folder:
 
 ```
 results/<experiment>/<UTC timestamp>-<commit>/
-  manifest.toml   experiment ID, config file, git commit, start and end time, number of
-                  trials, machine, operating system, Rust version
-  config.toml     an exact copy of the config that was run
+  manifest.toml   experiment ID, config file (experiment runs), algorithm (validation
+                  runs), git commit, start and end time, number of trials, whether the
+                  result is official, machine, operating system, Rust version
+  config.toml     for `cargo xtask experiment` runs, an exact copy of the config
   *.csv           one row per trial: steady.csv, figure16.csv, failover.csv,
                   partition.csv, recovery.csv, and, for real-cluster runs,
                   real-steady.csv, real-figure16.csv, real-failover.csv,
@@ -55,8 +57,4 @@ measurement.
 
 ## Rules
 
-- The runner refuses to start if the working tree has uncommitted changes, so every result
-  maps to an exact commit.
-- Existing results are never edited, moved, or deleted. `cargo xtask check-repo` rejects
-  any such change.
-- To exclude a bad run, record it and the reason in the analysis code.
+The rules for results are in `CONTRIBUTING.md` (Experiment results).

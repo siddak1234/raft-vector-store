@@ -1,9 +1,11 @@
 # Results
 
-Results so far, by phase, with the commands that reproduce them. Every number below comes
-from a committed results folder under `experiments/results/`; `cargo xtask figures`
-recomputes it. The research protocol (`docs/RESEARCH.md`) defines every metric and
-criterion used here.
+Results by phase, with the commands that reproduce them. Every number below comes from a
+committed results folder under `experiments/results/`, except those labeled as scratch
+runs, which were not committed. `cargo xtask figures` recomputes the numbers of the latest
+run of each experiment; the earlier runs are kept, and labeled where they are superseded,
+but the analysis reads only the latest. The research protocol (`docs/RESEARCH.md`) defines
+every metric and criterion used here.
 
 ## Phase 1: Simulator and Raft
 
@@ -16,7 +18,7 @@ criterion used here.
 | Seeds | 1–10,000 (odd seeds: 3 servers, even seeds: 5) |
 | Simulated time | 166.7 hours (60 s per seed) |
 | Faults per seed | 82.9 on average |
-| Elections per seed | 76.4 on average (highest term reached) |
+| Highest term per seed | 76.4 on average |
 | Commits per seed | 3,311 on average |
 | Seeds with any violation (M12) | **0** |
 
@@ -155,9 +157,10 @@ command, shows a search with commands is not vacuous; the adapter's test in CI
 (`crates/modelcheck/tests/small.rs`, 2 servers, 1 command) finds such a state for both
 algorithms.
 
-The bounds of §6 (2 commands, 2 elections per server) are far beyond the experiment
-machine: while sizing the search, the smallest variant already had about 37 million states
-per algorithm, and breadth-first search ran out of its 16 GB. Amendment A5 replaces them
+The bounds of `docs/RESEARCH.md` §6 (2 commands, 2 elections per server) are far beyond the
+experiment machine: while sizing the search, the smallest variant already had about 37
+million states per algorithm, and breadth-first search ran out of its 16 GB. Amendment A5
+replaces them
 with a fixed ladder of bounds searched depth-first; the reported E6 runs at the
 data-collection tag.
 
@@ -217,7 +220,8 @@ Figure 16 procedure (amendment A4.8), with the harness of amendment A6.
 | Maximum | 492.5 ms | 728.7 ms |
 | Election rounds (median) | 1 | 1 |
 
-Figure: `analysis/figures/E2_real.png`. The real cluster's distribution matches the
+Figure: `analysis/figures/E2_real.png`, drawn from the latest runs, at `data-v4`. The
+real cluster's distribution matches the
 simulator's at the median. The first run, with `F_FULLFSYNC`
 (`experiments/results/E2-real/20261025T015147Z-a4fea84`), had a median of 242.6 ms; amendment
 A6 explains why it was rerun.
@@ -306,7 +310,8 @@ Every run below was made at `data-v4` (`docs/RESEARCH.md` amendments A7–A9), o
 time on the experiment machine, with each run's results committed before the next began:
 `cargo xtask validate`, `cargo xtask experiment <ID>`, and `cargo xtask complexity`.
 Every configuration reached its planned sample size, and no run had a safety violation.
-`cargo xtask figures` recomputes every number in this section.
+`cargo xtask figures` recomputes every number in this section except those marked as
+superseded by the reruns at `data-v5` (Phase 6).
 
 ### Validation and A/A tests at `data-v4`
 
@@ -516,7 +521,8 @@ Raft's totals are lower on every measure, and Raft has fewer SLOC in each of the
 modules. The largest gap is in election (SLOC 128 against 183, cyclomatic 17 against 27).
 In replication the cyclomatic complexity is equal (39), and Raft's cognitive complexity is
 one higher there (33 against 32) and in `lib.rs` (10 against 9). `docs/BUGLOG.md` also
-holds 10 shared bugs.
+holds 11 shared bugs, 10 of them logged before this run; `e7.py` counts the log as it is
+now.
 
 ### E8: Vector store recovery (H6)
 
@@ -532,7 +538,7 @@ lost and no two data nodes served a shard as primary at once, in any trial.
 
 **H6 is not supported:** S1's intervals are too wide for equivalence, and S2 shows no
 difference. The shortest recovery took 3,385 ms, above the minimum of 2.5 s that
-`docs/DESIGN.md` §7 predicts.
+`docs/DESIGN.md` §7 predicts, and the longest 5,643 ms.
 
 ### Superseded and stopped runs
 
@@ -545,8 +551,14 @@ difference. The shortest recovery took 3,385 ms, above the minimum of 2.5 s that
   changed only for 3 servers with k = 100 (Multi-Paxos median 195.5, now 189).
 - **E6 at `data-v1`** was stopped during its second rung and was not committed (amendment
   A7).
+- **The first E2 and E2-lan runs** (`E2/20261020T173244Z-99054ab` and the exploratory
+  `E2-lan/20261020T173416Z-4fefc40`) were made before trials without a leader at the crash
+  instant were marked not ready (`docs/BUGLOG.md`), and were rerun as
+  `E2/20261020T173556Z-61c89dd` and `E2-lan/20261020T173608Z-066e4c1`. Every row is the same
+  apart from that mark: 70 more E2 trials (72 in all) and 1 E2-lan trial became not ready.
 - **Earlier validation, A/A, and E2 runs** remain in `experiments/results/` and are reported
-  in the sections above; the `data-v4` runs are the ones the analysis uses.
+  in the sections above. The analysis uses the latest run of each experiment: the `data-v4`
+  runs, and the `data-v5` reruns of AA, E3, and E4 (Phase 6).
 
 ## Phase 6: Analysis
 
@@ -574,10 +586,12 @@ significantly different at k = 0 (0.948 and 0.977). Unavailability (M2) did not 
 (p (Holm) ≥ 0.23). In the `data-v4` run no M1 difference had been significant
 (p (Holm) ≥ 0.14), with ratios of 0.92–0.96.
 
-In the simulator, over all k, the time without a leader had a median of 238 ms for Raft and
-216 ms for Multi-Paxos on 3 servers (206 and 195 ms on 5), a p99 of 575 against 309 ms
-(467 against 274 ms), and a maximum of 800 against 323 ms (729 against 308 ms). Raft needed
-more than one election round in 39.1% of trials on 3 servers and 30.9% on 5, against 9.5%
+Per configuration in the simulator, the median time without a leader was 193–244 ms and the
+median unavailability 543–546 ms. Over all k, the time without a leader had a median of
+238 ms for Raft and 216 ms for Multi-Paxos on 3 servers (206 and 195 ms on 5), a p99 of
+575 against 309 ms (467 against 274 ms), and a maximum of 800 against 323 ms (729 against
+308 ms). Raft needed more than one election round in 39.1% of trials on 3 servers and 30.9%
+on 5, against 9.5%
 and 18.3% for Multi-Paxos. Of the multi-round Raft trials, 1,438 of 1,564 on 3 servers and
 1,210 of 1,234 on 5 had a vote refused because the candidate's log was behind; on 3 servers
 every trial with such a refusal needed more than one round.
@@ -642,7 +656,8 @@ With one client Multi-Paxos sends 2–21% more bytes per commit. With more comma
 Raft sends more: at 16 clients 2.8–3.1 times Multi-Paxos's bytes in the simulator and
 2.7–3.0 times on the real cluster, and at 64 clients 4.6–5.6 times. In messages per commit
 the ratio is 0.89–0.95 at 4 and 16 clients (0.94–0.96 on the real cluster at 16) and
-1.10–1.12 at 64, so Raft sends more messages at moderate load and fewer at high load. Which messages carry Raft's extra bytes was not
+1.10–1.12 at 64, so Raft sends more messages at moderate load and fewer at high load: with
+64 clients on 3 servers and the paper-like network, 3.61 messages per commit against 4.03. Which messages carry Raft's extra bytes was not
 measured.
 
 **The single-server reference (E1).** In all eight single-server configurations the two
@@ -671,9 +686,11 @@ stalls came at rates both algorithms sustained: 3 servers at 8,000 per s, and 5 
 
 ### Exploratory analyses
 
-These were decided after seeing the data and decide no hypothesis. Except the last, each ran
-on a scratch copy of the code with added counters; the copy reproduced every official value
-for the trials it reran, so the counters describe the official trials.
+These were decided after seeing the data and decide no hypothesis. Except the last two, each
+ran on a scratch copy of the code with added counters; the copy reproduced every official
+value for the trials it reran, so the counters describe the official trials. The last two
+are scratch runs, one above the tested range and one repeating an official trial, each
+described in its paragraph.
 
 **What grows in Raft's election traffic (E3, H2a).** Messages between the crash and the
 election, by type, median over seeds 1–200, 3 servers, k = 0 against k = 1000:
@@ -728,6 +745,12 @@ reaching a candidate, and 3 a stale leader's reaching the new leader.
 A follower rejects an `AppendEntries` that arrives before the one it follows. Rejections
 are frequent from 4 clients on, and the number of entries each message carries grows with
 the commands in flight.
+
+**Above the tested range (E1-load).** A scratch diagnostic, not committed, ran one trial of
+each algorithm at 12,000 per s on 3 servers, from a copy of the code with debug counters. Neither committed a command
+in its window. Over the trial's 144,000 offered commands (2 s of warm-up and the 10 s
+window), the Raft leader synced its storage 540,927 times and the Multi-Paxos leader 544,449
+times, while each follower synced fewer than 4,000 times.
 
 **Rerun of the trial that stalled at 1,000 per s (E1-load).** A scratch rerun, not
 committed, of Raft on 5 servers at 1,000 per s with seed 13, the same code path as at

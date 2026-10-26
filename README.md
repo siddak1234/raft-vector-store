@@ -57,7 +57,7 @@ and the other `rvs` commands drive it.
 - [Data plane design](docs/DESIGN.md): leases, replication, and their correctness
   arguments
 - [Contributing](CONTRIBUTING.md): repository rules and workflow
-- [Results](docs/RESULTS.md): results so far, with the commands that produce them
+- [Results](docs/RESULTS.md): every result, with the commands that produce them
 - [Bug log](docs/BUGLOG.md): bugs found during development
 - [Report](docs/REPORT.md) and [slides](docs/SLIDES.md): the final write-up
 

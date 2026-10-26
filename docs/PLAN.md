@@ -1,6 +1,7 @@
 # Raft vs. Multi-Paxos on a Vector Store Control Plane: Project Plan
 
 **Course:** ECE 382N Distributed Systems, Fall 2026
+
 **Team:** Siddak Bhatia (sb56878), Harrison Held (HWH492)
 
 ## 1. Objective
@@ -259,8 +260,8 @@ These rules make the comparison apples to apples:
      - Paired simulator runs: Wilcoxon signed-rank.
      - Real-cluster runs: Mann–Whitney U.
      - Equivalence claims: two one-sided tests (TOST) with a ±5% margin.
-   - **Reporting:** full distributions, medians, and p99, with bootstrap 95% confidence
-     intervals.
+   - **Reporting:** full distributions, medians, and p99, with bootstrap intervals: 90%
+     for ratios of medians and 95% for effect sizes.
    - **Timing:** sample sizes, tests, and margins are committed in `docs/RESEARCH.md`
      before any data is collected.
 9. **Two environments:**
@@ -288,7 +289,7 @@ These rules make the comparison apples to apples:
 
 - **M7 Commit latency:** p50 and p99, from the client sending a command until it receives
   the committed reply.
-- **M8 Throughput:** commits per second at saturation.
+- **M8 Throughput:** commit replies per second during a trial's measurement window.
 - **M9 Cost per commit:** messages and bytes per committed command.
 - **M10 Re-sent entries:** log entries carried in a new leader's messages, from its
   election until its no-op entry is committed.
@@ -307,7 +308,8 @@ These rules make the comparison apples to apples:
 - **M15 Log gaps:** indexes below a server's last index that hold no entry.
 - **M16 Entries sent toward a leader:** entries carried in messages delivered to a
   candidate or leader.
-- **M17 Log divergence:** the largest number of entries a follower must discard.
+- **M17 Discarded entries:** entries a server overwrites with a different payload or
+  truncates.
 
 **Implementation**
 
@@ -315,8 +317,7 @@ These rules make the comparison apples to apples:
 - **M19 Code size and complexity:** lines of code, cyclomatic and cognitive complexity per
   subproblem (election, replication, safety/commit), measured with
   `rust-code-analysis-cli`.
-- **M20 Bugs:** bugs caught by the checkers during development, by subproblem (from
-  `docs/BUGLOG.md`).
+- **M20 Bugs:** entries in `docs/BUGLOG.md`, by algorithm and subproblem.
 
 **System**
 
@@ -353,8 +354,8 @@ decision rules are in `docs/RESEARCH.md` §6.
 - [x] `docs/DESIGN.md`: lease and replication protocol with correctness argument
 - [x] `docs/BUGLOG.md` started
 
-**Exit:** CI passes. The three design documents are merged, and the merged commit is
-tagged `protocol-v1`.
+**Exit:** CI passes. The three design documents are committed, and that commit is tagged
+`protocol-v1`.
 
 ### Phase 1: Simulator and Raft
 
@@ -380,7 +381,8 @@ summarized in `docs/RESULTS.md`.
       violations
 - [x] Stateright adapter for both algorithms (`crates/modelcheck`)
 - [x] State counts for both algorithms at the bounds of `docs/RESEARCH.md` amendment A5.
-      The bounds of §6 cannot be searched exhaustively on the experiment machine
+      The bounds of `docs/RESEARCH.md` §6 cannot be searched exhaustively on the experiment
+      machine
 
 **Exit:** zero violations across the shared seed set, and state counts recorded for both
 algorithms.
@@ -512,7 +514,8 @@ experiments/
   configs/       experiment definitions
   results/       raw results, written only by the experiment runner
 analysis/        statistics and plotting (Python, pinned with uv)
-docs/            plan, research protocol, Paxos specification, design, bug log
+docs/            plan, research protocol, Paxos specification, design, bug log, results,
+                 report, slides, and the report's figures
 ```
 
 Repository rules, including which crates may depend on which, are in `CONTRIBUTING.md`
@@ -539,9 +542,9 @@ consensus.
 
 - **In scope:** everything in Phases 0–6.
 - **Stretch goals:**
-  - snapshots and log compaction (§7)
+  - snapshots and log compaction (Raft paper §7)
   - PreVote and CheckQuorum, as an additional experiment on unnecessary leader changes
-  - membership changes (§6)
+  - membership changes (Raft paper §6)
   - shard splitting
   - approximate search indexes such as HNSW
 - **Out of scope:** existing Raft or Paxos libraries as dependencies, Byzantine faults,

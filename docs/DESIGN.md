@@ -1,8 +1,8 @@
 # Data Plane Design: Leases and Replication
 
-**Status:** working design. This document is not part of the frozen protocol, because the
-data plane does not affect RQ1–RQ5. It changes like code: commit the change to `main` with
-the reason in the commit message.
+**Status:** implemented in Phase 4, whose checks it passes. This document is not part of the
+frozen protocol, because the data plane does not affect RQ1–RQ5. It changes like code:
+commit the change to `main` with the reason in the commit message.
 
 ## 1. Scope
 
@@ -190,8 +190,7 @@ The rules below keep `ackSet ⊇ inSync` (the committed set) at all times.
    earlier change of epoch can hold, below `endOffset`, entries from an older epoch that
    `p′` never had. Each epoch has one primary, which writes each offset once, so an epoch
    and an offset identify an entry, and comparing epochs finds where the logs part, as
-   Kafka's leader-epoch truncation does. This rule replaced the original one during
-   implementation (2026-10-24), before any data-plane data was collected.
+   Kafka's leader-epoch truncation does (`docs/BUGLOG.md` records the earlier rule).
 3. **Start serving.** `p′` accepts writes once its lease is valid and `ackSet` has at
    least `minInSync` members.
 
@@ -252,8 +251,8 @@ old lease has expired, so M21 in experiment E8 is expected to be at least `L + �
 |---|---|
 | `Heartbeat`, `HeartbeatReply` (lease granted or refused, plus shard-map changes since the node's last known version) | Data node ↔ control-plane leader |
 | `Write`, `WriteReply` | Client ↔ primary |
-| `Replicate`, `Ack` | Primary ↔ backup |
-| `NewEpoch`, `NewEpochAck` (with the new primary's epoch boundaries) | New primary ↔ backup |
+| `Replicate`, `ReplicateReply` | Primary ↔ backup |
+| `NewEpoch`, `NewEpochReply` (with the new primary's epoch boundaries) | New primary ↔ backup |
 | `CopyShard` (log chunks) | Primary → replacement replica |
 | `Search`, `SearchReply` | Client ↔ primary |
 | `Inspect`, `SetFaults` (tests only) | Test runner → data node: what a replica holds of a shard, for the no-lost-write check; cutting the node off from control-plane servers |

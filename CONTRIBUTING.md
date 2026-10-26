@@ -22,10 +22,11 @@ and CI runs it on every push to `main`.
 | `experiments/configs/` | Experiment definitions, versioned like code |
 | `experiments/results/` | Raw results, written only by the experiment runner |
 | `analysis/` | Python statistics and figures |
-| `docs/` | Plan, research protocol, specifications, bug log |
+| `docs/` | Plan, research protocol, specifications, bug log, results, report, slides, and the report's figures |
 
-Nothing else belongs at the top level. Datasets, node data, and build output are kept out
-of the repository.
+Besides these folders, the top level holds only `.cargo/`, `.github/`, `.gitignore`,
+`Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `LICENSE`, `README.md`, and this file.
+Datasets, node data, and build output are kept out of the repository.
 
 ## Commands
 
@@ -67,9 +68,10 @@ used only in `analysis/`.
 
 ## Experiment results
 
-- Results are written only by the experiment runner (`cargo xtask validate` and
-  `cargo xtask experiment <id>`). The runner refuses to start with uncommitted changes, so
-  every result maps to an exact commit. Commit new results before starting the next run.
+- Results are written only by the experiment runner, through `cargo xtask validate`,
+  `cargo xtask experiment <id>`, `cargo xtask complexity`, and `cargo xtask dataplane`. The
+  runner refuses to start with uncommitted changes, so every result maps to an exact
+  commit. Commit new results before starting the next run.
 - To try something out without making an official result, pass `--scratch <dir>` with a
   folder outside the repository.
 - Existing results are never edited, moved, or deleted. To exclude a bad run, record it and
@@ -84,12 +86,12 @@ that states the reason.
 
 ## Bugs
 
-Record every bug found in a consensus implementation or the test harness in
-`docs/BUGLOG.md`, in the same commit as the fix. The bug log is metric M20.
+Record every bug found in a consensus implementation, the test harness, or other shared code
+in `docs/BUGLOG.md`, in the same commit as the fix. The bug log is metric M20.
 
 ## What `check-repo` enforces
 
-1. Only the entries in the layout above exist at the top level.
+1. Only the top-level entries listed under Layout exist.
 2. Every folder in `crates/` is a workspace crate.
 3. No file is larger than 1 MiB outside `experiments/results/`.
 4. No datasets or archives (`.hdf5`, `.h5`, `.npy`, `.npz`, `.fvecs`, `.ivecs`, `.zip`,

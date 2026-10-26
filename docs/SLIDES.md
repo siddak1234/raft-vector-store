@@ -10,6 +10,7 @@ paginate: true
 # Raft vs. Multi-Paxos on a Vector Store Control Plane
 
 ECE 382N Distributed Systems, Fall 2026
+
 Siddak Bhatia · Harrison Held
 
 ---
@@ -158,8 +159,10 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
   its promises carry them. Raft's grows too, but only through followers' replies to the
   crashed leader; on 3 servers its vote messages stay at 13 bytes.
 - **H2b:** Multi-Paxos elects 2–11% sooner in the simulator; unavailability differs by less
-  than 0.6%; no significant difference on the real cluster.
-- **Flapping link (P5):** Multi-Paxos changed leaders 15 times in 10 s, Raft 1–2.
+  than 0.6%. On the real cluster it elects sooner with k = 100 (p (Holm) 0.041 and 0.035),
+  with no significant difference at k = 0.
+- **Flapping link (P5):** over the 10 s of flapping and the 3 s after, Multi-Paxos changed
+  leaders 15 times (median), Raft 1–2.
   - The cut-off follower stood 314 times under Multi-Paxos and won all 314.
   - Under Raft it stood 101 times and won none: voters refused its stale log.
 
