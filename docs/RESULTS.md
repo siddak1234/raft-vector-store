@@ -410,7 +410,8 @@ below the offered rate instead of leveling off.
 ### E3: Failover (H2a, H2b)
 
 Results: `E3/20261025T203312Z-bf01783`. 16,000 simulator and 800 real-cluster trials, all
-ready, none censored.
+ready, none censored. *Its M10 values and its real-cluster results are superseded by the
+rerun at `data-v5` (Phase 6, amendment A10).*
 
 **H2a: Multi-Paxos part supported, Raft part not supported.** Election bytes (M4), median,
 k = 0 against k = 1000:
@@ -435,7 +436,8 @@ k = 1000, but a median of 0 at k = 10, which is examined in Phase 6.
 
 ### E4: Recovery and catch-up (H3)
 
-Results: `E4/20261025T184350Z-08c7b52`. 24,000 trials, all ready, none censored.
+Results: `E4/20261025T184350Z-08c7b52`. 24,000 trials, all ready, none censored. *Its M10
+values are superseded by the rerun at `data-v5` (Phase 6, amendment A10).*
 
 **H3 is supported in every configuration.** Re-sent entries (M10) by the third leader in
 E4a, one-sided Wilcoxon, Holm-corrected:
@@ -544,3 +546,108 @@ difference. The shortest recovery took 3,385 ms, above the minimum of 2.5 s that
   A7).
 - **Earlier validation, A/A, and E2 runs** remain in `experiments/results/` and are reported
   in the sections above; the `data-v4` runs are the ones the analysis uses.
+
+## Phase 6: Analysis
+
+### Reruns at `data-v5` (amendment A10)
+
+The analysis found that M10 left out the entries a new leader sends in the input that
+elects it (`docs/BUGLOG.md`). The fix is tagged `data-v5`, and the runs that measure M10 were
+rerun. In the simulator every row of the three reruns equals its `data-v4` row except in M10.
+
+**A/A test, simulator** (`AA/20261026T143144Z-aa23b8b`): **PASS**. M10 is 4 against 4 in the
+E3 part.
+
+**E3** (`E3/20261026T143213Z-d9711f7`; the `data-v4` run was
+`E3/20261025T203312Z-bf01783`). Re-sent entries (M10), median, Raft / Multi-Paxos, every
+difference significant (p (Holm) below 10⁻¹⁵³):
+
+| Servers | k = 0 | k = 10 | k = 100 | k = 1000 |
+|---|---|---|---|---|
+| 3 | 2 / 8 | 4 / 26 | 4 / 167 | 4 / 1,067 |
+| 5 | 4 / 16 | 8 / 52 | 8 / 373 | 8 / 3,136 |
+
+The real-cluster part of E3 was rerun too. Multi-Paxos's time without a leader (M1) was
+shorter at k = 100 on both sizes (ratios 0.918 and 0.932, p (Holm) 0.041 and 0.035) and not
+significantly different at k = 0 (0.948 and 0.977). Unavailability (M2) did not differ
+(p (Holm) ≥ 0.23). In the `data-v4` run no M1 difference had been significant
+(p (Holm) ≥ 0.14), with ratios of 0.92–0.96.
+
+In the simulator, over all k, the time without a leader had a median of 238 ms for Raft and
+216 ms for Multi-Paxos on 3 servers (206 and 195 ms on 5), a p99 of 575 against 309 ms
+(467 against 274 ms), and a maximum of 800 against 323 ms (729 against 308 ms). Raft needed
+more than one election round in 39.1% of trials on 3 servers and 30.9% on 5, against 9.5%
+and 18.3% for Multi-Paxos. Of the multi-round Raft trials, 1,438 of 1,564 on 3 servers and
+1,210 of 1,234 on 5 had a vote refused because the candidate's log was behind; on 3 servers
+every trial with such a refusal needed more than one round.
+
+**E4** (`E4/20261026T151137Z-23072b9`). **H3 is supported in every configuration:**
+
+| Servers | k | Raft | Multi-Paxos | Ratio, 90% CI | p (Holm) |
+|---|---|---|---|---|---|
+| 3 | 10 | 5 | 96 | 19.2 [19.2, 43.2] | 5.6 × 10⁻¹⁶⁵ |
+| 3 | 100 | 5 | 317 | 63.4 [61.7, 64.9] | 5.6 × 10⁻¹⁶⁵ |
+| 5 | 10 | 8 | 124 | 15.5 [13.8, 15.5] | 1.8 × 10⁻¹⁶¹ |
+| 5 | 100 | 8 | 510 | 63.8 [56.3, 70.5] | 4.2 × 10⁻¹⁶¹ |
+
+Catch-up time (M11) is unchanged from Phase 5.
+
+### Exploratory analyses
+
+These were decided after seeing the data and decide no hypothesis. Each ran on a scratch
+copy of the code with added counters; the copy reproduced every official value for the
+trials it reran, so the counters describe the official trials.
+
+**What grows in Raft's election traffic (E3, H2a).** Messages between the crash and the
+election, by type, median over seeds 1–200, 3 servers, k = 0 against k = 1000:
+
+| | k = 0 | k = 1000 |
+|---|---|---|
+| Raft `RequestVote` + `RequestVoteReply` | 3 messages, 13 bytes | 3 messages, 13 bytes |
+| Raft `AppendEntriesReply` | 2 messages, 16 bytes | 1,002 messages, 8,012 bytes |
+| Multi-Paxos `Promise` | 1 message, 406 bytes | 1 message, 134,005 bytes |
+| Multi-Paxos `Accepted` | 2 messages, 20 bytes | 1,002 messages, 10,020 bytes |
+
+Raft's growth is the followers' replies to the crashed leader's last messages, which M4
+counts because they are sent after the crash. Its vote messages do not grow. Multi-Paxos's
+growth is mostly the entries its voters return in promises.
+
+**P3 and P5 have the same unavailability (E5).** For each algorithm and size, M2 is
+identical in P3 and P5 in all 4,000 pairs of trials with the same seed. Both procedures cut
+the same follower first, M2 times the first command after the fault, and that command
+commits through the leader and the other follower before P5's link first changes, at least
+100 ms later.
+
+**Leader changes on a flapping link (E5, P5).** Seeds 1–20 for each algorithm and size:
+
+| | Multi-Paxos | Raft |
+|---|---|---|
+| Times the flapping follower stood for election | 314 | 101 |
+| Times it won | 314 | 0 |
+| Its vote requests refused because its log was behind (M5) | — | 193 |
+| Other candidates' requests refused for the same reason | — | 86 |
+
+Under Multi-Paxos the follower cut off from the leader wins every election it starts, the
+old leader wins the next, and leadership alternates between the two; the third server
+never leads. Under Raft the other servers refuse the follower's vote requests because its
+log is behind, so it never wins.
+
+**Raft's entries toward a leader (M16).** In Raft only `AppendEntries` carries entries, and
+only a leader sends it. Over the 1,600 Raft E3 trials of seeds 1–200, which reproduced M16
+exactly (495 entries in 452 trials), 469 entries were a newly elected leader's
+`AppendEntries` reaching a server still a candidate in the same term, 23 a stale leader's
+reaching a candidate, and 3 a stale leader's reaching the new leader.
+
+**Rejections and batching against load (E1).** Raft, 3 servers, paper-like network, seeds
+1–20, median:
+
+| Clients | Commits per s | `AppendEntries` rejected per commit | Entries per `AppendEntries` |
+|---|---|---|---|
+| 1 | 35 | 0.04 | 1.0 |
+| 4 | 134 | 0.46 | 1.4 |
+| 16 | 503 | 1.17 | 3.5 |
+| 64 | 2,151 | 1.12 | 7.6 |
+
+A follower rejects an `AppendEntries` that arrives before the one it follows. Rejections
+are frequent from 4 clients on, and the number of entries each message carries grows with
+the commands in flight.

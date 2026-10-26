@@ -4,8 +4,8 @@ title: Raft vs. Multi-Paxos on a Vector Store Control Plane
 paginate: true
 ---
 
-<!-- Status: the results slides (marked "Pending") are filled in from the Phase 5 runs at
-data-v4 (docs/RESEARCH.md amendments A7-A9). Every other slide is complete. -->
+<!-- Status: complete. Results are from the Phase 5 runs at data-v4 and the reruns at data-v5
+(docs/RESEARCH.md amendments A7-A10). -->
 
 # Raft vs. Multi-Paxos on a Vector Store Control Plane
 
@@ -122,48 +122,91 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 - Every checker passed: the bug cost only time.
 - Protocol rule: fix, tag `data-v2`, **rerun everything** for both algorithms. The
   superseded run is kept and reported.
+- The analysis later found a miscounted metric (re-sent entries); the three runs that
+  measure it were rerun at `data-v5`.
 
 ---
 
 ## Results: validation
 
-*Pending: checkers, A/A tests, and E2 at `data-v4`.*
+- 10,000 random-fault seeds per algorithm, 166.7 simulated hours each: **0 violations**.
+- A/A tests (Raft against Raft) pass in the simulator and on the real cluster.
+- Figure 16: R1 passes; R2 fails at the shortest timeouts on the paper-like network
+  (round trips exceed the timeouts), and holds on the LAN-like network.
 
 ---
 
-## RQ1: Steady state (E1)
+## RQ1: Steady state, H1 not supported
 
-*Pending.*
+| Commands in flight | Faster |
+|---|---|
+| 1 | neither |
+| 4–16 | Multi-Paxos: at 16 clients, 7–10% lower latency and 8–11% higher throughput (simulator) |
+| 64 or more | Raft |
 
----
-
-## RQ2: Leader failure and partitions (E3, E5)
-
-*Pending.*
-
----
-
-## RQ3: Re-sent entries and catch-up (E3, E4)
-
-*Pending.*
+- Every message has its own delay, so messages arrive out of order. Raft followers reject
+  an `AppendEntries` whose predecessor is missing: about once per commit at 16 clients.
+- With more in flight, each resend carries more entries (1.0 → 7.6), and Raft wins.
+- Load sweep: Raft keeps up to 8,000 (3 servers) and 6,000 (5) commands per s;
+  Multi-Paxos to at least 10,000.
 
 ---
 
-## RQ4: Coherency (E6)
+## RQ2: Leader failure and partitions
 
-*Pending.*
+- **H2a:** Multi-Paxos's election traffic grows with uncommitted entries (bytes ×112–130):
+  its promises carry them. Raft's grows too, but only through followers' replies to the
+  crashed leader; on 3 servers its vote messages stay at 13 bytes.
+- **H2b:** Multi-Paxos elects 2–11% sooner in the simulator; unavailability differs by less
+  than 0.6%; no significant difference on the real cluster.
+- **Flapping link (P5):** Multi-Paxos changed leaders 15 times in 10 s, Raft 1–2.
+  - The cut-off follower stood 314 times under Multi-Paxos and won all 314.
+  - Under Raft it stood 101 times and won none: voters refused its stale log.
 
 ---
 
-## RQ5: Implementation (E7)
+## RQ3: Re-sent entries and catch-up, H3 supported
 
-*Pending.*
+| | Raft | Multi-Paxos |
+|---|---|---|
+| Entries re-sent by a new leader (E4a, median) | 5–8 | 96–510 |
+| Catch-up of 1,000 missing entries | 84–96 ms | 272 ms |
+| Catch-up of 100 missing entries | 68–70 ms | 63 ms |
+
+- 15–64 times fewer re-sent entries in every configuration: a Raft leader already holds
+  every committed entry; a Multi-Paxos leader re-proposes everything it inherits.
+- A Raft leader pipelines up to 1,024 entries to a matching follower; Multi-Paxos sends
+  missing chosen entries 64 at a time, one message unanswered.
 
 ---
 
-## RQ6: Vector store recovery (E8)
+## RQ4: Coherency, H4 partly supported
 
-*Pending.*
+- **Log gaps:** none for Raft in 29,000 trials; every Multi-Paxos trial had some.
+- **Reachable states:** at the one rung both completed, Multi-Paxos reached 3.7% fewer
+  (35.8 M against 37.1 M). Two larger rungs exceeded the budget; the rest were skipped.
+- **Entries toward a leader:** non-zero for Raft, but 95% are a new leader's
+  `AppendEntries` reaching a same-term candidate: the metric, not the data flow.
+
+---
+
+## RQ5: Implementation
+
+| | Raft | Multi-Paxos |
+|---|---|---|
+| Message types | 4 | 5 |
+| SLOC | 860 | 1,008 |
+| Cyclomatic / cognitive | 123 / 62 | 139 / 68 |
+| Largest gap | election: 128 against 183 SLOC | |
+
+---
+
+## RQ6: Vector store recovery, H6 not supported
+
+- 800 trials: **0 lost writes, never two serving primaries.**
+- Recovery took 3.4–5.6 s, dominated by the lease (3 s + 0.5 s margin).
+- Data node alone: intervals too wide for equivalence. With the control-plane leader: no
+  difference detected (medians within 0.3%).
 
 ---
 
@@ -191,7 +234,14 @@ Frozen as a one-page spec before coding (`docs/PAXOS_SPEC.md`).
 
 ## Conclusion
 
-*Pending.*
+- **Efficiency:** equivalent with 1, 4, and 64 commands in flight; Multi-Paxos up to 11%
+  faster with 16, on a network that reorders messages.
+- **Leader failure:** Raft re-sends far fewer entries; Multi-Paxos elects 2–11% sooner;
+  Raft's election restriction keeps it stable on a flapping link.
+- **Coherency:** Raft's logs never have gaps; at the one bound both searches completed,
+  Multi-Paxos reached 3.7% fewer states.
+- **Implementation:** Raft is smaller on every code measure.
+- **Vector store:** recovery is set by the lease under both algorithms.
 
 ---
 

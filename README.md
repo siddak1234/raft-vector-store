@@ -30,13 +30,18 @@ nodes, where each shard is replicated from a primary to its backups.
 cargo xtask validate                    # Raft: seeds 1-10000 of the random-fault campaign
 cargo xtask validate --algorithm paxos  # the same campaign for Multi-Paxos
 cargo xtask experiment AA               # A/A test of the harness in the simulator
-cargo xtask experiment E2               # Raft paper Figure 16 reproduction
 cargo xtask experiment AA-real          # A/A test on a real cluster of processes
-cargo xtask experiment E2-real          # Figure 16 at 150-300 ms on a real cluster
+cargo xtask experiment E2               # Raft paper Figure 16 reproduction (also E2-lan, E2-real)
+cargo xtask experiment E1               # steady state; then E1-load, E3, E4, E5, E6, E8
+cargo xtask complexity                  # E7: protocol size and code complexity
 cargo xtask dataset glove-25            # download the GloVe-25 dataset (also: sift)
 cargo xtask dataplane                   # the Phase 4 data-plane checks, both algorithms
+cargo xtask demo --consensus raft       # live failover demonstration (also: paxos)
 cargo xtask figures                     # summaries and figures from the latest results
 ```
+
+`docs/RESULTS.md` lists the results folder of every run, and each run's `manifest.toml`
+records the commit it ran at. A full rerun of Phase 5 takes about 18 hours on one machine.
 
 To try the system by hand, `cargo xtask cluster 3 --consensus raft --data-nodes 4` starts
 a local cluster and prints its cluster file; `target/release/rvs --cluster FILE status`
@@ -54,8 +59,7 @@ and the other `rvs` commands drive it.
 - [Contributing](CONTRIBUTING.md): repository rules and workflow
 - [Results](docs/RESULTS.md): results so far, with the commands that produce them
 - [Bug log](docs/BUGLOG.md): bugs found during development
-- [Report](docs/REPORT.md) and [slides](docs/SLIDES.md): the final write-up; the results
-  sections are filled in from the Phase 5 runs
+- [Report](docs/REPORT.md) and [slides](docs/SLIDES.md): the final write-up
 
 ## License
 

@@ -58,28 +58,33 @@ def h2a(frame) -> None:
               f"ratio {ratio:.3f} [{low:.3f}, {high:.3f}], p (Holm) {p:.3g}: {result}")
 
 
-def plot(frame, name: str, title: str) -> str:
+def plot(frame, column: str, label: str, name: str, title: str) -> str:
+    """The distribution of one failover metric, one panel per k, one line per algorithm and
+    cluster size, in the style of the Raft paper's Figure 16 (docs/RESEARCH.md §8)."""
     ks = sorted(frame["uncommitted"].unique())
-    figure, axes = plt.subplots(len(ks), 2, figsize=(9, 2.4 * len(ks)), squeeze=False)
-    for row, k in enumerate(ks):
-        for col, (column, label) in enumerate([("time_without_leader_ms", "M1 time without leader (ms)"),
-                                               ("unavailability_ms", "M2 unavailability (ms)")]):
-            axis = axes[row][col]
-            for servers in sorted(frame["servers"].unique()):
-                for algorithm in ["raft", "paxos"]:
-                    group = frame[(frame["uncommitted"] == k) & (frame["servers"] == servers)
-                                  & (frame["algorithm"] == algorithm)]
-                    cdf(axis, group[column], f"{algorithm} {servers}s")
-            axis.set_title(f"k = {k}", fontsize=9)
-            axis.set_xlabel(label, fontsize=8)
-            axis.set_ylabel("cumulative %", fontsize=8)
-            axis.legend(fontsize=6)
+    figure, axes = plt.subplots(1, len(ks), figsize=(3.2 * len(ks), 3), squeeze=False)
+    for axis, k in zip(axes[0], ks):
+        for servers in sorted(frame["servers"].unique()):
+            for algorithm in ["raft", "paxos"]:
+                group = frame[(frame["uncommitted"] == k) & (frame["servers"] == servers)
+                              & (frame["algorithm"] == algorithm)]
+                cdf(axis, group[column], f"{algorithm} {servers}s")
+        axis.set_title(f"k = {k}", fontsize=9)
+        axis.set_xlabel(label, fontsize=8)
+        axis.set_ylabel("cumulative %", fontsize=8)
+        axis.legend(fontsize=6)
     figure.suptitle(title)
     figure.tight_layout()
     path = figure_path(name)
     figure.savefig(path, dpi=150)
     plt.close(figure)
     return str(path)
+
+
+def plot_all(frame, metrics: list[tuple[str, str]], prefix: str, environment: str) -> None:
+    for column, label in metrics:
+        name = f"{prefix}_{column}.png"
+        print(f"Figure: {plot(frame, column, label, name, f'E3 {environment}: {label}')}")
 
 
 def main() -> int:
@@ -95,7 +100,7 @@ def main() -> int:
     show("H2b and the other metrics: Multi-Paxos against Raft (Wilcoxon, paired by seed)",
          algorithms(sim, ["servers", "uncommitted"], METRICS, True))
     h2a(sim)
-    print(f"Figure: {plot(sim, 'E3_failover.png', 'E3 simulator: failover')}")
+    plot_all(sim, METRICS, "E3", "simulator")
     try:
         real = load(folder, "real-failover.csv")
     except FileNotFoundError:
@@ -103,9 +108,10 @@ def main() -> int:
     print(f"\n  real cluster: {len(real)} trials, {int((~real['ready']).sum())} not ready, "
           f"{int(real['censored'].sum())} censored")
     real = real[real["ready"] & ~real["censored"]]
+    real_metrics = METRICS[:5] + METRICS[5:6]
     show("Real cluster: Multi-Paxos against Raft (Mann-Whitney)",
-         algorithms(real, ["servers", "uncommitted"], METRICS[:5] + METRICS[5:6], False))
-    print(f"Figure: {plot(real, 'E3_real_failover.png', 'E3 real cluster: failover')}")
+         algorithms(real, ["servers", "uncommitted"], real_metrics, False))
+    plot_all(real, real_metrics, "E3_real", "real cluster")
     return 0
 
 

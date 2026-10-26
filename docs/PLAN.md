@@ -477,15 +477,21 @@ complexity. Results are in `docs/RESULTS.md`.
 
 ### Phase 6: Analysis and Report
 
-- [ ] Analysis code (Python: pandas, SciPy, matplotlib) that regenerates every figure and
+- [x] Analysis code (Python: pandas, SciPy, matplotlib) that regenerates every figure and
       table from raw results
-- [ ] Final report (`docs/REPORT.md`): background, design, method, results by research
+- [x] Final report (`docs/REPORT.md`): background, design, method, results by research
       question, threats to validity, conclusion
-- [ ] Demo of live failover under both algorithms (`cargo xtask demo`), and presentation
+- [x] Demo of live failover under both algorithms (`cargo xtask demo`), and presentation
       slides (`docs/SLIDES.md`)
 
 **Exit:** report and slides are complete, and `cargo xtask figures` regenerates all
 figures from the repository.
+
+**Status:** done. The analysis found a measurement bug in re-sent entries (M10); amendment
+A10 records the fix, tagged `data-v5`, and the reruns of the simulator A/A test, E3, and
+E4. Exploratory analyses, each on a scratch copy that reproduced the official values,
+explain the results that the pre-registered metrics left open. The report, slides, and
+`docs/RESULTS.md` give every result, and `cargo xtask figures` regenerates every figure.
 
 ## 9. Repository Layout
 

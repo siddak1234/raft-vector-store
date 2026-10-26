@@ -3,9 +3,8 @@
 **ECE 382N Distributed Systems, Fall 2026: Final Report**
 **Siddak Bhatia (sb56878), Harrison Held (HWH492)**
 
-> **Status:** sections 1–3, 5, and the references are complete. Section 4 (results) and
-> section 6 (conclusion) are written from the Phase 5 runs at `data-v4`
-> (`docs/RESEARCH.md` amendments A7–A9), which have not been made yet.
+> **Status:** complete. Results are from the Phase 5 runs at `data-v4` and the reruns at
+> `data-v5` (`docs/RESEARCH.md` amendments A7–A10).
 
 ## Abstract
 
@@ -20,7 +19,15 @@ to consider. The research questions, metrics, experiments, sample sizes, and sta
 tests were fixed in a research protocol before any data was collected, and every later
 change is recorded as a dated amendment.
 
-*Findings: pending the `data-v4` runs.*
+In steady state the two were equivalent within ±5% with 1, 4, and 64 commands in flight,
+but not with 16: there Multi-Paxos was up to 11% faster, because Raft's followers reject
+messages that arrive out of order. After a leader failure, Raft re-sent 15–64 times fewer
+entries, but its election restriction cost extra rounds, so Multi-Paxos had a leader 2–11%
+sooner in the simulator; on a flapping link the same restriction kept Raft stable while
+Multi-Paxos changed leaders 15 times in 10 s. Raft's logs never had gaps and its
+implementation is smaller, but at the one model-checking bound both algorithms completed,
+Multi-Paxos reached 3.7% fewer states. Shard recovery in the vector store took 3.4–5.6 s
+under both, set by its lease.
 
 ## 1. Background
 
@@ -128,12 +135,12 @@ Data nodes keep vectors in memory and answer k-nearest-neighbor queries by brute
   leadership, so an old lease has always expired before a shard is reassigned.
 - **Replication.** Each shard has 3 replicas. A primary acknowledges a write once every
   replica in its ack set holds it. The ack set always contains the committed in-sync set,
-  and a primary accepts writes only while its ack set has at least 2 members. New primaries come
-  only from the in-sync set, and each promotion increases the shard's epoch. A new primary
-  aligns backups with `NewEpoch`. During implementation we found that deleting only the
-  entries above the new primary's last offset, as first designed, can keep entries from an
-  epoch the new primary never followed, and replaced it with an epoch comparison like
-  Kafka's leader-epoch truncation (`docs/DESIGN.md` §6.4).
+  and a primary accepts writes only while its ack set has at least 2 members. New
+  primaries come only from the in-sync set, and each promotion increases the shard's
+  epoch. A new primary aligns backups with `NewEpoch`. During implementation we found that
+  deleting only the entries above the new primary's last offset, as first designed, can
+  keep entries from an epoch the new primary never followed, and replaced it with an epoch
+  comparison like Kafka's leader-epoch truncation (`docs/DESIGN.md` §6.4).
 - **Re-replication.** When a node is marked dead, the control-plane leader assigns each of
   its shards a replacement; the primary copies the shard to it and adds it to the in-sync
   set once it has caught up.
@@ -286,40 +293,221 @@ checker that found it; it is the data for metric M20.
 
 ## 4. Results
 
-*Pending: written from the `data-v4` runs, with every number taken from
-`docs/RESULTS.md` and the committed results in `experiments/results/`.*
+Every number below comes from `docs/RESULTS.md`, which names the results folder of each
+run. Runs are at `data-v4`, except the simulator A/A test, E3, and E4, which are at
+`data-v5` (amendment A10). Analyses marked exploratory were decided after seeing the data;
+each ran on a scratch copy of the code with added counters that reproduced every official
+value for the trials it reran, and none decides a hypothesis.
 
 ### 4.1 Validation: checkers, A/A tests, and E2
 
-*Pending.*
+Both algorithms passed the 10,000-seed fault campaign with zero violations, 166.7 simulated
+hours each. Multi-Paxos reached higher terms (207.7 on average, against 76.5 for Raft),
+because each server may campaign only in the terms it owns.
 
-### 4.2 RQ1: Steady state (E1)
+Both A/A tests passed: no Holm-corrected test was significant, and every E1 ratio interval
+lay within [0.95, 1.05] (simulator [1.000, 1.001] for median latency; real cluster
+[0.998, 1.003]). The harness shows no difference where there is none.
 
-*Pending.*
+E2 met R1 and failed R2, as in Phase 1: on the paper-like network a round trip can exceed
+the shortest election timeouts, so 12–24 ms elects no faster than 25–50 ms (73.3 against
+69.2 ms). On the LAN-like network the medians increase with the timeout (exploratory). On
+the real cluster at 150–300 ms the median was 214.1 ms, against the simulator's 210.8 ms.
+
+### 4.2 RQ1: Steady state (E1, E1-load)
+
+**H1 is not supported.** In the simulator 24 of the 32 decision intervals (median latency
+and throughput, 3 and 5 servers, both networks, 1–64 clients) lie within [0.95, 1.05]; on
+the real cluster 5 of 16 do. The eight that fail in the simulator are all at 16 clients,
+where Multi-Paxos has a 7–10% lower median latency and an 8–11% higher throughput. On the
+real cluster Multi-Paxos is faster with 16 clients in three of the four configurations
+(median-latency ratios 0.886–0.946); with 1 client the algorithms are equivalent on the
+LAN-like network, and on the paper-like one the intervals are too wide to show it, with no
+test significant.
+
+Which algorithm is faster depends on how many commands are in flight, the number of
+closed-loop clients in E1, or the offered rate times the latency in E1-load. The pattern is
+the same on both networks, so the exploratory load sweep agrees with E1:
+
+| Commands in flight | Faster | Evidence |
+|---|---|---|
+| 1 | neither | E1, 1 client: ratios 0.998–1.003 |
+| 4–16 | Multi-Paxos | E1: 4 clients in the simulator, 16 in both environments |
+| About 50 | Multi-Paxos, by about 1 ms | E1-load at 1,000 per s |
+| 64 or more | Raft | E1 with 64 clients (simulator); E1-load from 2,000 per s, about 100 in flight |
+
+An exploratory measurement in the simulator (Raft, 3 servers, paper-like network, seeds
+1–20) shows what changes with load. Because each message gets its own delay, a follower
+often receives an `AppendEntries` before the one it follows and rejects it; the leader then
+probes and resends.
+
+| Clients | Commits per s | Rejections per commit | Entries per `AppendEntries` |
+|---|---|---|---|
+| 1 | 35 | 0.04 | 1.0 |
+| 4 | 134 | 0.46 | 1.4 |
+| 16 | 503 | 1.17 | 3.5 |
+| 64 | 2,151 | 1.12 | 7.6 |
+
+At moderate load a rejection costs an extra round trip for a batch of one to four entries,
+and Multi-Paxos, which accepts each index on its own, is faster. At high load each resend
+carries about eight entries, and Raft sends fewer messages per commit than Multi-Paxos
+(3.61 against 4.03 with 64 clients on 3 servers and the paper-like network). We have not
+established why Multi-Paxos is then slower than Raft rather than only no faster.
+
+The same batching shows in storage: Raft synced 1.21–2.33 times per commit across the
+16- and 64-client configurations, Multi-Paxos 3.00–5.12, about once per server. In the load
+sweep Raft used less CPU time per commit at every rate it sustained, and on the real
+cluster in E1 with 16 clients Multi-Paxos's median CPU time per commit was 4–27% higher.
+
+Raft also stops keeping up sooner: the highest offered rate it sustained was 8,000 per s
+on 3 servers and 6,000 on 5, against at least 10,000, the highest rate tested, for
+Multi-Paxos. Past that point Raft's throughput fell far below the offered rate (to 56 per
+s on 5 servers at 8,000 per s). Multi-Paxos collapsed the same way above the tested range:
+in a scratch diagnostic at 12,000 per s on 3 servers, each algorithm's leader synced its
+storage about 540,000 times for the 144,000 commands offered, once per command it
+appended, because clients resend a command after 500 ms without a reply (amendment A1.1).
+A server handles all its inputs in one queue, so the followers' acknowledgments wait
+behind those appends.
 
 ### 4.3 RQ2: Leader failure and partitions (E3, E5)
 
-*Pending.*
+**H2a: supported for Multi-Paxos, not for Raft.** Median election bytes (M4) at k = 0 and
+k = 1000:
+
+| Servers | Multi-Paxos | Raft |
+|---|---|---|
+| 3 | 1,236 → 161,079, grows (p (Holm) 3.7 × 10⁻¹⁰⁹) | 59 → 8,054, not equivalent |
+| 5 | 2,888 → 322,678, grows (p (Holm) 5.9 × 10⁻¹³³) | 121 → 16,105, not equivalent |
+
+The exploratory breakdown by message type shows why Raft's half fails. Raft's vote
+messages are 3 messages and 13 bytes at both k (3 servers). What grows is
+`AppendEntriesReply`, 2 → 1,002 messages: the followers' replies to the crashed leader's
+last messages, which M4 counts because they are sent after the crash. Multi-Paxos's growth
+is in `Promise`, 406 → 134,005 bytes, the uncommitted entries a new leader must learn. The
+hypothesis holds for election messages; the metric includes more than election messages.
+
+**H2b: time without a leader differs; unavailability barely.** In the simulator Multi-Paxos
+elected a new leader 2–11% sooner in every configuration (M1 ratios 0.893–0.978, every
+p (Holm) below 10⁻⁶). On the real cluster it was sooner at k = 100 (ratios 0.918 and 0.932,
+p (Holm) 0.041 and 0.035) and not significantly at k = 0. Raft needed more than one election
+round in 39% of failovers on 3 servers and 31% on 5, against 9.5% and 18.3% for
+Multi-Paxos, so the difference is in the tail: over all k, Raft's p99 was 575 ms on 3
+servers and 467 ms on 5, against 309 and 274 ms for Multi-Paxos, whose medians were 22 and
+11 ms lower. Most of those Raft trials had a vote refused because the candidate's log was
+behind (1,438 of 1,564 on 3 servers, 1,210 of 1,234 on 5): after the crash only some
+followers hold the newest entries, and Raft's election restriction makes a candidate
+without them lose its round. Unavailability (M2) differed by less than 0.6% in the
+simulator and not significantly on the real cluster. Its medians, 543–546 ms in the
+simulator, are far above the time without a leader (193–244 ms): a client that sent a
+command to the crashed leader waits out its 500 ms reply timeout before it retries
+(amendment A1.1), so that timeout, more than the election, sets M2.
+
+**Partitions (E5).** Unavailability differed by at most 3.5% in every scenario. In P3 and P5
+it is identical for every seed: M2 times the first command after the fault, which commits
+before P5's link first changes, so it does not measure the flapping. Leader changes (M6)
+were a median of 1 for both algorithms except in P5, where Multi-Paxos changed leaders 15
+times in 10 s against Raft's 1–2. In an exploratory trace (seeds 1–20) the follower cut off
+from the leader stood for election 314 times under Multi-Paxos and won all 314, and
+leadership alternated between it and the old leader. Under Raft it stood 101 times and won
+none: the other servers refused its vote requests 193 times because its log was behind. On the real
+cluster, P1 and P3 with 5 servers showed no significant difference.
 
 ### 4.4 RQ3: Re-sent entries and catch-up (E3, E4)
 
-*Pending.*
+**H3 is supported in every configuration.** Entries re-sent by the third leader in E4a
+(M10), median:
 
-### 4.5 RQ4: Coherency (E6, and simulator counters from E3–E5)
+| Servers | k | Raft | Multi-Paxos | Ratio, 90% CI |
+|---|---|---|---|---|
+| 3 | 10 | 5 | 96 | 19.2 [19.2, 43.2] |
+| 3 | 100 | 5 | 317 | 63.4 [61.7, 64.9] |
+| 5 | 10 | 8 | 124 | 15.5 [13.8, 15.5] |
+| 5 | 100 | 8 | 510 | 63.8 [56.3, 70.5] |
 
-*Pending.*
+Every p (Holm) is below 10⁻¹⁶⁰. In E3, Raft's new leader sent a median of 2–8 entries at
+every k, one or two per follower; Multi-Paxos's sent 8–16 at k = 0 and 1,067 and 3,136 at
+k = 1000. A Raft leader already holds every committed entry and sends followers only what
+they lack; a Multi-Paxos leader re-proposes every entry above its commit index in its own
+term, and the more uncommitted entries it inherits, the more it sends.
+
+**Catch-up (M11)** depends on how far behind the follower is. With 1,000 missing entries
+Raft caught up 2.8–3.2 times faster (84–96 ms against 272 ms); with 100, Multi-Paxos was
+7–11% faster (63 ms against 68–70 ms). Once a Raft follower's log matches, the leader
+sends up to 1,024 entries without waiting; a Multi-Paxos leader sends missing chosen
+entries in `Commit` messages of 64, one at a time.
+
+### 4.5 RQ4: Coherency (E6; counters from E3–E5)
+
+**H4 is partly supported.**
+
+**Reachable states (M14).** Only the smallest rung of the ladder, no client commands, one
+election per server, no heartbeat timer firing, completed for both algorithms: Raft
+37,125,265 distinct compared states, Multi-Paxos 35,753,384, 3.7% fewer. The next two
+rungs reached the budget of 1.2 billion generated states for both, and the five larger
+rungs were skipped by the rule of amendment A5.4. Safety held in every state of every
+search. At the one rung we can compare, the prediction fails. Raft's compared state
+includes its vote, which Multi-Paxos does not persist (section 5), so this rung is a narrow
+basis.
+
+**Log gaps (M15).** In the 29,000 E3–E5 simulator trials of each algorithm, Raft's logs
+never had a gap, and Multi-Paxos's had gaps in every trial (mean of the per-trial maximum:
+225.7). As predicted.
+
+**Entries toward a leader (M16).** The prediction of zero for Raft fails: 10,418 Raft
+trials had some (mean 4.8 entries), against 21,048 Multi-Paxos trials (mean 223.9). In
+Raft only `AppendEntries` carries entries, and only a leader sends it. An exploratory tally
+over 1,600 Raft E3 trials, which reproduced M16 exactly, found that 469 of the 495 entries
+were a newly elected leader's `AppendEntries` reaching a server still a candidate in the
+same term, and the other 26 a stale leader's `AppendEntries` reaching a candidate or the new
+leader. None was a follower sending entries to a leader; M16 counts by the receiver's role
+at delivery, and that catches the moment a split vote resolves.
+
+**Discarded entries (M17).** No single direction: Raft discarded more in E4a (a median of
+`k` against 0), in P2 and P4, and in P1 with 3 servers; Multi-Paxos discarded more in P5
+(26–27 against 2–3).
 
 ### 4.6 RQ5: Implementation (E7)
 
-*Pending.*
+As H5 expects, Raft is the smaller protocol and implementation: 4 message types against 5,
+and lower totals on every measure: SLOC 860 against 1,008, LLOC 210 against 237,
+cyclomatic complexity 123 against 139, cognitive complexity 62 against 68. Raft has fewer
+SLOC in each of the four modules; the largest gap is in election (SLOC 128 against 183,
+cyclomatic 17 against 27). Two exceptions run the other way: Raft persists one more field
+(`votedFor`), and its replication and shared-state modules are one point higher in
+cognitive complexity (33 against 32, 10 against 9). The bug log holds 2 Raft and 1
+Multi-Paxos bugs, all in replication; the one found during data collection affected both
+(amendment A7).
 
 ### 4.7 RQ6: Vector store recovery (E8)
 
-*Pending.*
+**H6 is not supported.** In 800 trials no acknowledged write was lost and no two data nodes
+served a shard as primary at once. Shard recovery (M21), median:
+
+| Scenario | Servers | Raft | Multi-Paxos | Result |
+|---|---|---|---|---|
+| S1: data node killed | 3 | 3,978 ms | 4,001 ms | ratio 1.006 [0.995, 1.131], not equivalent |
+| S1 | 5 | 3,518 ms | 3,994 ms | ratio 1.135 [0.998, 1.142], not equivalent |
+| S2: data node and control-plane leader killed | 3 | 4,558 ms | 4,546 ms | p (Holm) 0.36, no difference detected |
+| S2 | 5 | 4,558 ms | 4,551 ms | p (Holm) 1, no difference detected |
+
+Every recovery took at least 3,385 ms, above the 2.5 s minimum the lease design predicts:
+the control plane cannot reassign a shard until the old primary's lease (3 s plus a 0.5 s
+margin. has expired. S1's intervals are wide rather than shifted, so the test cannot show
+equivalence; S2's medians are within 0.3%.
 
 ### 4.8 Superseded results
 
-*Pending: the `data-v1` E4 run, and what changed at `data-v2`.*
+- **E4 at `data-v1`.** A bug in both leaders (amendment A7) made a backlog move one message
+  per round trip. Raft's catch-up of 1,000 entries took 216–315 ms at `data-v1`, against
+  84–96 ms after the fix; Multi-Paxos's was 272 ms in both. The `data-v1` run is kept in the
+  repository.
+- **AA, E3, and E4 at `data-v4`.** They undercounted M10 (amendment A10): for example
+  Multi-Paxos's E3 median with 3 servers and k = 10 read 0 instead of 26, and its E4a median
+  with 5 servers and k = 100 read 254 instead of 510. Every other simulator value is the same
+  at `data-v5`. E3's real-cluster part is not deterministic: in its `data-v4` run no
+  difference in time without a leader was significant (p (Holm) ≥ 0.14), and in the
+  `data-v5` run the differences at k = 100 are.
+- **E6 at `data-v1`** was stopped during its second rung and was not committed.
 
 ## 5. Threats to Validity
 
@@ -400,14 +588,58 @@ checker that found it; it is the data for metric M20.
 - Holm–Bonferroni correction is applied within each experiment, not across experiments.
 - Paired seeds remove variation caused by different fault schedules in the simulator; the
   real cluster is analyzed unpaired.
-- The ±5% equivalence margin was chosen before the data, but it is a judgment: smaller
+- The ±5% equivalence margin.was chosen before the data, but it is a judgment: smaller
   differences are reported as equivalent.
 - Analyses decided after seeing data, such as E2 on the LAN-like network and the E4c check
   that found the bug, are labeled exploratory and are not used to decide any hypothesis.
 
 ## 6. Conclusion
 
-*Pending the `data-v4` runs.*
+We built one control plane on two consensus algorithms that share every line except the
+consensus module, fixed the comparison in a protocol before collecting data, and ran it in
+a simulator and on a real cluster. Against the Raft paper's three claims:
+
+**Efficiency.** Raft and our Multi-Paxos are equivalent within ±5% with 1, 4, and 64
+commands in flight, but not with 16, where Multi-Paxos had up to 10% lower median latency
+in the simulator and up to 11% on the real cluster; with 4 it was 3–5% faster, within the
+margin. The gap comes from Raft's in-order
+consistency check meeting a network model that delays each message on its own: a follower
+rejects an `AppendEntries` whose predecessor has not arrived, about once per commit at 16
+clients, and the resend costs a round trip. With more commands in flight each resend
+carries more entries and Raft is the faster, but under an open-loop load it kept up with
+6,000–8,000 commands per second against at least 10,000 for Multi-Paxos. A network that
+delivers each follower's messages in order should narrow the gap at moderate load; we did
+not test that.
+
+**Leader failure.** A new Raft leader re-sends 15–64 times fewer entries than a Multi-Paxos
+leader (H3), because it already holds every committed entry, and its election messages do
+not grow with uncommitted entries, while Multi-Paxos's promises carry them. As registered,
+H2a fails for Raft, because the metric also counts the followers' replies to the crashed
+leader. The cost of Raft's approach is its election restriction: a candidate without the
+newest entries loses its round, so Raft needed more than one round in 31–39% of failovers
+against 10–18% for Multi-Paxos, and Multi-Paxos had a leader 2–11% sooner. Unavailability,
+set mostly by the clients' 500 ms retry timeout, differed by less than 0.6%. The same
+restriction keeps a follower on a flapping link from taking over: it won none of 101
+elections under Raft and all 314 under Multi-Paxos, which changed leaders 15 times in 10 s.
+
+**Coherency.** Raft's logs never had gaps, and Multi-Paxos's always did. Two other
+predictions did not hold as measured. At the one model-checking bound both algorithms
+completed, Multi-Paxos reached 3.7% fewer states; larger bounds did not fit in the budget.
+Raft's entries toward a leader are not zero, though nearly all are a new leader's
+`AppendEntries` reaching a candidate of the same term.
+
+**Implementation.** Raft is the smaller of the two: one message type fewer and lower totals
+in code size and complexity on every measure, with the largest gap in election, though it
+persists one more state field (`votedFor`).
+
+**The vector store.** Shard recovery took 3.4–5.6 s under both algorithms, set by the lease,
+and neither equivalence nor a difference could be shown.
+
+**The method.** Four defects came to light after data collection began, found by checking
+unexpected results, pilot runs, or the analysis code: a flow-control bug in both leaders, a
+reply-size limit in the harness, missing-data handling in the analysis, and a miscounted
+metric. Each was fixed, logged in `docs/BUGLOG.md`, and recorded with a dated amendment, and
+every run it affected was repeated.
 
 ## References
 
