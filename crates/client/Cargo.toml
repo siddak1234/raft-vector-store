@@ -20,5 +20,8 @@ tokio.workspace = true
 toml.workspace = true
 tonic.workspace = true
 
+[dev-dependencies]
+tokio-stream = { workspace = true, features = ["net"] }
+
 [lints]
 workspace = true
