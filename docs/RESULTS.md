@@ -419,7 +419,9 @@ Raft had the lower CPU time per commit at every rate it sustained, and the lower
 latency from 2,000 per s up to its limit, by 1.1–4.8 ms; at 1,000 per s Multi-Paxos's was
 lower by 0.2 ms on 3 servers and 1.0 ms on 5. Multi-Paxos kept up at every tested rate,
 with its median latency rising to 227–231 ms on 5 servers at 8,000–10,000 per s. Past its
-limit, Raft's throughput fell far below the offered rate instead of leveling off.
+limit, Raft's throughput fell far below the offered rate instead of leveling off. A
+stalled trial has no CPU time per commit, so the CPU medians cover only the trials that
+committed (amendment A11).
 
 ### E3: Failover (H2a, H2b)
 
@@ -690,7 +692,9 @@ paper-like one, one client round trip, and the server sends no messages.
 Over all 360 trials of each algorithm, Raft stalled in 44 and Multi-Paxos in 4. Two Raft
 stalls came at rates both algorithms sustained: 3 servers at 8,000 per s, and 5 servers at
 1,000 per s (seed 13), the lowest rate tested. Neither cause is known; the second was rerun
-(below).
+(below). The real-cluster transport drops a message without counting it when a server's
+stream to a peer already holds 4,096 messages (amendment A11), and whether that happened in
+these trials is not known.
 
 ### Exploratory analyses
 
@@ -766,3 +770,25 @@ committed, of Raft on 5 servers at 1,000 per s with seed 13, the same code path 
 the tests' one dependency have changed). It received 10,002 replies in its window, with no
 late command and a median latency of 52.1 ms, so the stall did not repeat. The real
 cluster is not deterministic, and one rerun does not show what caused the stall.
+
+### Fairness audit (amendment A11)
+
+An audit after data collection checked the committed results and code, and changed neither.
+
+- **Matched inputs.** In every A/B configuration both algorithms have the same seeds,
+  parameters, and number of trials. No trial is censored or not ready, and the analysis
+  has no exclusion list. E3's number of followers that received the uncommitted entries,
+  a procedure choice drawn from the trial's seed, is the same for both algorithms in all
+  8,000 simulator and 400 real-cluster seed pairs.
+- **One machine, one run at a time.** All 32 runs in `experiments/results/` record the same
+  machine (Apple M1 Pro, 8 logical CPUs, macOS) and compiler (rustc 1.99.1), and no two
+  runs overlap in time. Every Phase 5 run, including the reruns at `data-v5`, was made
+  from a commit whose code equals its tag.
+- **Safety.** Every committed trial records zero violations.
+- **Found.** Two differences between the implementations that the matched settings do not
+  cover:
+  - Multi-Paxos heartbeats resend unacknowledged entries.
+  - Multi-Paxos followers rewrite entries they hold.
+
+  There are also gaps in measurement and in recording the environment. Amendment A11 lists
+  them all, with the decision not to rerun; `docs/REPORT.md` §5 discusses their effect.

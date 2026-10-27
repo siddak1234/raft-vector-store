@@ -201,8 +201,10 @@ begin, only bug fixes are allowed.
   - **Separate random streams:** one for the environment (fault schedule, message delays,
     workload) and one for each algorithm instance (election timeouts).
   - **Replayable schedules:** each trial's fault schedule is regenerated from its seed, in
-    its own random stream, so both algorithms face identical inputs and any trial can be
-    replayed from its seed and commit.
+    its own random stream, so both algorithms face the same faults and procedure choices,
+    and any trial can be replayed from its seed and commit. Message delays, losses, and
+    duplicates come from one network stream, so they stay the same only while the two
+    algorithms send the same messages.
 - **Shared checkers:**
   - No two servers apply different commands at the same index.
   - There is at most one leader per term or ballot.
@@ -496,7 +498,10 @@ explain the results that the pre-registered metrics left open. The report, slide
 `docs/RESULTS.md` give every result, and `cargo xtask figures` regenerates every figure.
 After Phase 6, the effect sizes and the E2 sensitivity analysis that `docs/RESEARCH.md` §8
 specifies, which the analysis lacked, were added, along with figures of every experiment
-in the report and slides.
+in the report and slides. A fairness audit after data collection found two differences
+between the implementations that the matched settings do not cover, and gaps in
+measurement and in recording the environment. They are disclosed, and no experiment was
+rerun (`docs/RESEARCH.md` amendment A11).
 
 ## 9. Repository Layout
 

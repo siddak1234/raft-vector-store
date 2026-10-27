@@ -729,6 +729,89 @@ fix, because the fix cannot change them:
 Before the fix was tagged, a scratch rerun of E3 and E4a on seeds 1–200 reproduced every
 `data-v4` value except M10.
 
+### A11. 2026-10-26: Fairness audit after data collection; no rerun
+
+**Outcome.** After data collection, an audit compared the two implementations and the
+harness, looking for differences the matched settings of §3 and amendment A1 do not cover,
+and checked the committed results.
+
+It found no difference in the inputs, settings, or rules the harness applies to the two
+algorithms:
+
+- Every A/B configuration gives both algorithms the same seeds and parameters.
+- E3 records the number of followers that received the uncommitted entries. That number
+  is a procedure choice drawn from the trial's seed, and it is the same for both
+  algorithms in all 8,400 E3 seed pairs (simulator and real cluster).
+- Every run used the same machine and compiler, one run at a time.
+
+It did find the following:
+
+1. **Heartbeat contents differ.** A Multi-Paxos heartbeat resends up to 64 of a follower's
+   oldest unacknowledged entries. A Raft heartbeat to a replicating follower carries only
+   entries never sent (amendment A1.4), and a lost message is repaired after the follower
+   rejects a later one. `docs/PAXOS_SPEC.md` §7 wrongly lists this behavior as matched
+   (`docs/PAXOS_SPEC.md` amendment A4). In both algorithms, sending entries does not reset
+   the heartbeat timer, so heartbeats go out under load too.
+2. **Multi-Paxos followers rewrite entries they hold.** A Multi-Paxos follower writes every
+   entry an `Accept` carries, while a Raft follower skips an entry it already holds with
+   the same term. Storage counts and syncs every write under both algorithms, so a resent
+   entry costs Multi-Paxos storage bytes and can cost it a sync.
+
+   Items 1 and 2 can add storage syncs, storage bytes, network bytes, and CPU time to
+   Multi-Paxos. Item 1 also changes how each algorithm repairs a lost message. A
+   Multi-Paxos heartbeat resends it, while Raft resends it after a rejection, which comes
+   sooner when more entries follow and later when none do. How much of the E1 and E4
+   differences these items explain was not measured.
+3. **The real-cluster transport can drop messages without counting them.** The stream to
+   each peer holds at most 4,096 messages, and a message that finds it full is dropped.
+   The sender has already counted the message as sent, and nothing counts the drop. It is
+   not known whether this happened in any trial. The simulator does not use this
+   transport.
+4. **The measurement log is part of the CPU and memory measures.** Every real-cluster
+   trial starts its servers with `--record`. Each server then keeps an entry for every
+   message it sends until the trial ends, and the CPU time and peak memory of amendment A8
+   include that work. The work grows with the number of messages sent.
+5. **E1-load's CPU time per commit leaves out stalled trials.** A trial with no commit has
+   no CPU time per commit, so the medians cover only the trials that committed: 316 of
+   Raft's 360 and 356 of Multi-Paxos's 360. Latency medians count a stalled trial as
+   slower than any reply.
+6. **The environment is controlled but not recorded beyond the manifest.**
+   - Servers are not pinned to cores, on a machine with 6 performance and 2 efficiency
+     cores.
+   - Nothing checks or records the machine's load; amendment A4.10 is a procedure.
+   - In an experiment with both environments, the real-cluster trials start right after
+     the simulator trials, which run on every core, with no pause between them.
+   - Result rows carry no time.
+   - Manifests do not record `RVS_FSYNC` or the build mode.
+
+   Real-cluster trials run in a shuffled order with the algorithms interleaved (A4.2), so
+   these add noise to both algorithms rather than favoring one. The real-cluster A/A test,
+   with every ratio of medians within 1%, bounds that noise.
+7. **Two orders are fixed, not shuffled.**
+   - E6 searches each rung for Raft first, then for Multi-Paxos. Every incomplete search
+     stopped at the cap of 1.2 billion generated states, after 747–1,122 s, well within
+     its 6 h budget, so the order could not change which searches completed.
+   - `bench dataplane` checks Raft first. Its checks are pass or fail.
+8. **E8 keeps its trial folders.** A4.1 says each trial's data folder is deleted after the
+   trial; E8's are not. Each E8 trial still starts in a new, empty folder.
+9. **Censored trials.** The E3 and E4 analyses drop censored trials. No committed E3 or E4
+   trial is censored, so this changes no value.
+
+**Decision.** No experiment is rerun, and no code changes:
+
+- Items 1 and 2 are what each algorithm's specification prescribes, not bugs. Changing
+  either algorithm now would change the frozen design rather than fix a bug (§10,
+  amendment A3.2).
+- The other items concern measurement or the environment, in code shared by both
+  algorithms:
+  - Items 4 and 5 fall in descriptive or exploratory measures that decide no hypothesis.
+  - Item 6 adds noise that the A/A test bounds.
+  - Items 7–9 change no committed value.
+  - Whether item 3 happened is not known. A rerun without a counter for dropped messages
+    would not show it.
+
+`docs/REPORT.md` §5 and `docs/RESULTS.md` disclose the findings.
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm

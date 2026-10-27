@@ -287,7 +287,11 @@ Raft's tail is longer: more than one election round in 31–39% of failovers, ag
 
 - **Our** Multi-Paxos variant, built close to Raft; optimizations off in both.
 - Same two authors; Raft written first.
+- Not matched with Raft: Multi-Paxos heartbeats resend unacknowledged entries, and its
+  followers rewrite entries they hold; both can add syncs and bytes (amount not measured).
 - Simulator and localhost, not real networks; one machine, one SSD; `fsync(2)`.
+- Environment not recorded per trial (no core pinning, load, or timestamps); the shuffled
+  order and the A/A tests bound the noise.
 - E1–E5 send a 128-byte command that changes nothing; CPU and memory measured only in
   steady state and the load sweep.
 - Code complexity stands in for understandability.

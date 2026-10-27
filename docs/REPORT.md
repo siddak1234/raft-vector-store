@@ -287,6 +287,9 @@ before the data it affects unless it records an outcome:
 - **A9:** an analysis bug, fixed before the data it would have affected.
 - **A10:** a miscounted metric (re-sent entries), fixed; the three runs that measure it were
   repeated.
+- **A11:** an audit after data collection found two differences between the
+  implementations that the matched settings do not cover, and gaps in measurement and in
+  recording the environment. They are disclosed in section 5, and nothing was rerun.
 
 Two analyses that `docs/RESEARCH.md` §8 specifies, effect sizes and the E2 sensitivity
 analysis, were missing from the first version of the analysis and were added afterwards.
@@ -329,6 +332,11 @@ details.
 | Reachable states (one small bound) | Multi-Paxos | 3.7% fewer, at the only bound both searches completed |
 | Code size and complexity | Raft | SLOC 860 against 1,008; cyclomatic complexity 123 against 139 |
 | Shard recovery in the vector store | Neither | 3.4–5.6 s under both, set by the lease |
+
+Two choices in our Multi-Paxos, not matched with Raft, can add storage syncs, storage
+bytes, network bytes, and CPU time to Multi-Paxos, and one of them changes how it repairs a
+lost message (section 5). The rows on those measures and on catching up a follower may
+partly reflect them; we did not measure by how much.
 
 ### 4.1 Validation: checkers, A/A tests, and E2
 
@@ -623,6 +631,11 @@ the test cannot show equivalence: the difference of medians is 22.9 ms [−231.1
   index on its own. A Raft implementation that delivers each follower's messages in order,
   over one connection, would see fewer rejections; our steady-state comparison reflects
   this network model.
+- On the real cluster, CPU time and peak memory include each server's log of every message
+  it sent, which the server keeps for the whole trial so the runner can count messages;
+  that work grows with the messages sent. In E1-load a stalled trial has no CPU time per
+  commit, so those medians cover only the trials that committed: 316 of Raft's 360 and
+  356 of Multi-Paxos's.
 - Catch-up time (E4b, E4c) includes the wait for the leader's next heartbeat after the
   follower returns. Because each trial starts right after a leader is ready, that wait
   depends on how long the trial's commands took to commit. This applies to both algorithms,
@@ -642,6 +655,18 @@ the test cannot show equivalence: the difference of medians is 22.9 ms [−231.1
   shared. Raft's probing mode and Multi-Paxos's one-`Commit`-at-a-time rule are each
   algorithm's own way of repairing a lagging follower, and other choices would change the
   catch-up results.
+- Two behaviors differ between our implementations. `docs/PAXOS_SPEC.md` §7 wrongly lists
+  the first as matched (amendment A11; `docs/PAXOS_SPEC.md` amendment A4).
+  - A Multi-Paxos heartbeat resends up to 64 of a follower's oldest unacknowledged
+    entries. A Raft heartbeat to a replicating follower carries only new entries, so Raft
+    repairs a lost message only after the follower rejects a later one.
+  - A Multi-Paxos follower writes every entry it receives, including entries it already
+    holds, while a Raft follower skips those.
+
+  Both can add storage syncs, storage bytes, network bytes, and CPU time to Multi-Paxos.
+  The first also changes how a lost message is repaired: by the next heartbeat in
+  Multi-Paxos, and after a rejection in Raft, which comes sooner when more entries follow.
+  We did not measure how much of the differences in E1 and E4 they explain.
 
 **External.**
 
@@ -654,6 +679,20 @@ the test cannot show equivalence: the difference of medians is 22.9 ms [−231.1
   harness as much as to the algorithms. Storage calls `fsync(2)` (amendment A6), which
   survives process crashes, the only faults injected, but not necessarily power loss. No
   other machine was tested.
+- On the real cluster, a server drops a message without counting it when its stream to a
+  peer already holds 4,096 messages. We do not know whether this happened in any trial,
+  including the E1-load trials that stalled.
+- The environment was controlled but not recorded beyond each run's manifest (amendment
+  A11):
+  - Servers are not pinned to cores, and the machine has 6 performance and 2 efficiency
+    cores.
+  - Nothing records the machine's load.
+  - In experiments run in both environments, real-cluster trials start right after the
+    simulator trials, which use every core.
+  - Result rows carry no time.
+
+  The shuffled, interleaved trial order spreads these effects over both algorithms. The
+  real-cluster A/A test, with every ratio of medians within 1%, bounds the noise they add.
 - CPU time and memory were measured only in steady state on the real cluster (E1) and in
   the load sweep; the failover, partition, and recovery experiments record neither, and
   the simulator gives processing no time. Every command is 128 bytes; other sizes were not
@@ -696,7 +735,10 @@ a network that delivers each follower's messages in order would show whether thi
 the gap, and we did not test that. The two also spend different resources: Raft syncs
 storage less often and, with 16 clients and under load on the real cluster, uses less CPU
 time per commit, but with 16 or more commands in flight it sends 2.7–5.6 times the network
-bytes. Under a fixed offered
+bytes. Some of Multi-Paxos's extra syncs, bytes, and CPU time may come from two choices in
+our variant, not from the algorithm: its heartbeats resend unacknowledged entries, and its
+followers rewrite entries they already hold (section 5). We did not measure how much.
+Under a fixed offered
 load Raft had the lower latency up to 6,000–8,000 commands per second and then stopped
 keeping up, while Multi-Paxos kept up with at least 10,000, and Raft's cluster stalled in 44
 of 360 load trials against 4.

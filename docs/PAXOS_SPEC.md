@@ -262,6 +262,23 @@ Multi-Paxos data was collected.
 The status line at the top was written before the freeze and was not updated. This
 specification has been frozen since the tag `protocol-v1`.
 
+### A4. 2026-10-26: Heartbeat contents are not matched with Raft
+
+§7 lists "unacknowledged entries are resent on each heartbeat" as behavior matched with
+Raft. It holds for this specification: a heartbeat sends each follower its oldest
+unacknowledged entries (rule 2 under Leaders; amendment A2.5). It holds for the Raft
+implementation only while it probes a follower (`docs/RESEARCH.md` amendment A1.4). While
+replicating, a Raft heartbeat carries only entries never sent, and a lost message is
+repaired after the follower rejects a later one.
+
+A related difference: a follower here writes every entry an `Accept` carries, replacing any
+entry already there (rule 3 under Followers), while a Raft follower skips an entry it
+already holds with the same term. A resent entry therefore costs a Multi-Paxos follower a
+storage write.
+
+No rule above changes. Both differences were found in an audit after data collection
+(`docs/RESEARCH.md` amendment A11).
+
 ## References
 
 1. D. Ongaro and J. Ousterhout. *In Search of an Understandable Consensus Algorithm
